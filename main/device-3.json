@@ -1,0 +1,189 @@
+{
+   "slaveid": 3,
+   "name": "3rd",
+   "description": "Thirdt device",
+   "status": "offline",
+   "polling": true,
+   "id": 0,
+   "outputs":    [
+            {
+         "id": 0,
+         "name": "out 0",
+         "curVal": 0
+      },
+            {
+         "id": 1,
+         "name": "out 1",
+         "curVal": 0
+      },
+            {
+         "id": 2,
+         "name": "out 2",
+         "curVal": 0
+      },
+            {
+         "id": 3,
+         "name": "3",
+         "curVal": 0
+      },
+            {
+         "id": 4,
+         "name": "4",
+         "curVal": 0
+      },
+            {
+         "id": 5,
+         "name": "5",
+         "curVal": 0
+      }
+   ],
+   "inputs":    [
+            {
+         "id": 0,
+         "isButton": false,
+         "name": "0",
+         "events":          [
+                        {
+               "event": "on",
+               "slaveid": 2,
+               "output": 0,
+               "action": "on",
+               "name": "on0"
+            },
+                        {
+               "event": "off",
+               "slaveid": 2,
+               "output": 0,
+               "action": "off",
+               "name": "off0"
+            }
+         ],
+         "curVal": 1
+      },
+            {
+         "id": 1,
+         "isButton": false,
+         "curVal": 1,
+         "name": "1",
+         "events":          [
+                        {
+               "event": "off",
+               "slaveid": 1,
+               "output": 1,
+               "action": "off",
+               "name": "off0"
+            },
+                        {
+               "event": "on",
+               "slaveid": 1,
+               "output": 1,
+               "action": "on",
+               "name": "on0"
+            }
+         ]
+      },
+            {
+         "id": 2,
+         "isButton": false,
+         "name": "2",
+         "curVal": 1,
+         "events":          [
+                        {
+               "event": "off",
+               "slaveid": 1,
+               "output": 3,
+               "action": "off",
+               "name": "off2"
+            },
+                        {
+               "event": "on",
+               "slaveid": 1,
+               "output": 3,
+               "action": "on",
+               "name": "on2"
+            }
+         ]
+      },
+            {
+         "id": 3,
+         "isButton": false,
+         "name": "3",
+         "curVal": 1,
+         "events": [         {
+            "event": "toggle",
+            "slaveid": 1,
+            "output": 5,
+            "action": "toggle",
+            "name": "t3"
+         }]
+      },
+            {
+         "id": 4,
+         "isButton": false,
+         "name": "4",
+         "curVal": 1,
+         "events":          [
+                        {
+               "event": "off",
+               "slaveid": 1,
+               "output": 4,
+               "action": "off",
+               "name": "1"
+            },
+                        {
+               "event": "on",
+               "slaveid": 1,
+               "output": 4,
+               "action": "on",
+               "name": "2"
+            }
+         ]
+      },
+            {
+         "id": 5,
+         "isButton": false,
+         "name": "5",
+         "curVal": 1
+      },
+            {
+         "id": 6,
+         "isButton": false,
+         "name": "6",
+         "curVal": 1,
+         "events":          [
+                        {
+               "event": "on",
+               "slaveid": 2,
+               "output": 2,
+               "action": "on",
+               "name": "6on"
+            },
+                        {
+               "event": "off",
+               "slaveid": 2,
+               "output": 2,
+               "action": "off",
+               "name": "6off"
+            }
+         ]
+      },
+            {
+         "id": 7,
+         "isButton": true,
+         "name": "7",
+         "curVal": 1,
+         "events": [         {
+            "event": "toggle",
+            "slaveid": 2,
+            "output": 0,
+            "action": "toggle",
+            "name": "t1"
+         }]
+      }
+   ],
+   "autotimeout": 5000,
+   "mode": 1,
+   "ros": true,
+   "pollingmode": 8,
+   "inverse": false
+}
