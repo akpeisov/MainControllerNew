@@ -81,9 +81,7 @@ void app_main(void)
     if (initNetwork() == ESP_OK) {
         initWebServer();
     }
-    mbInit();
-    initCore();
-    //initOTA();
+    mbInit();    
     //sem_busy = xSemaphoreCreateMutex();
     createSemaphore();
     xTaskCreate(&wdtMemoryTask, "wdtMemoryTask", 4096, NULL, 5, NULL);

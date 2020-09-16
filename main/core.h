@@ -23,4 +23,3 @@ void pollingNew();
 
 SemaphoreHandle_t getSemaphore();
 void createSemaphore();
-void initCore();

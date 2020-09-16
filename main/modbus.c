@@ -120,7 +120,7 @@ esp_err_t mbInit() {
     };
     
     // Set UART log level
-    ESP_LOGI(TAG, "Start RS485 application test and configure UART.");
+    ESP_LOGI(TAG, "Starting RS485");
     // Install UART driver (we don't need an event queue here)
     // In this example we don't even use a buffer for sending data.
     ESP_ERROR_CHECK(uart_driver_install(uart_num, BUF_SIZE * 2, BUF_SIZE * 2, 0, NULL, 0));
@@ -133,10 +133,7 @@ esp_err_t mbInit() {
     ESP_ERROR_CHECK(uart_set_mode(uart_num, UART_MODE_RS485_HALF_DUPLEX));
     // Set read timeout of UART TOUT feature
     ESP_ERROR_CHECK(uart_set_rx_timeout(uart_num, ECHO_READ_TOUT));
-    // Allocate buffers for UART
-    //uint8_t* data = (uint8_t*) malloc(BUF_SIZE);
-    ESP_LOGI(TAG, "UART start recieve loop.\r\n");
-    //echo_send(uart_num, "Start RS485 UART test.\r\n", 24);
+    
     initQueue();    
     return ESP_OK;
 }

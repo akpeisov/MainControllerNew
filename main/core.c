@@ -72,7 +72,7 @@ bool reboot = false;
 static uint8_t actions_qty = 0;
 SemaphoreHandle_t sem_busy;
 uint8_t pollingList[MAX_DEVICES];
-static action_t *action[MAX_ACTIONS];
+static action_t* actions[MAX_ACTIONS];
 
 esp_err_t loadDevices() {
     char * buffer;
@@ -1500,14 +1500,6 @@ esp_err_t uiRouter(httpd_req_t *req) {
     return ESP_OK;
 }
 
-void initEventsActions() {
-    // for (int i=0;i<MAX_EVENTS;i++)
-    //     // mb_event[i] = NULL;
-    //     mb_event[i] = malloc(sizeof(event_t));
-    for (int i=0;i<MAX_ACTIONS;i++)
-        action[i] = malloc(sizeof(action_t));
-}
-
 void makePollingList() {
     // формируем список для поллинга
     pollingList[0] = 0;
@@ -1597,75 +1589,6 @@ bool isEquals(const char* str, char event) {
     return false;
 }
 
-void addAction(action_t pAction) {
-    //ESP_LOGI(TAG, "addAction ");
-    // action_t *act = malloc(sizeof(action_t));
- //    if (act == NULL) {
- //        ESP_LOGE(TAG, "Can't malloc action %d", actions_qty);
- //        return;
- //    }
- //    act->slave_addr = pAction.slave_addr;
- //    act->output = pAction.output;
- //    act->action = pAction.action;    
-    // action[actions_qty++] = act;
-    action[actions_qty]->slave_addr = pAction.slave_addr;
-    action[actions_qty]->output = pAction.output;
-    action[actions_qty]->action = pAction.action;
-    actions_qty++;
-}
-
-void processEvent(event_t *event) {
-    // обработка одного события
-    // нужно найти действия
-    if (!cJSON_IsArray(devices) || cJSON_GetArraySize(devices) == 0) {
-        ESP_LOGE(TAG, "devices is not a json array");
-        return;
-    }   
-    action_t act;
-    cJSON *childInput;      
-    cJSON *childDevice = devices->child;
-    cJSON *childEvent;              
-    while (childDevice)
-    {       
-        if (cJSON_GetObjectItem(childDevice, "slaveid")->valueint == event->slave_addr) {
-            ESP_LOGD(TAG, "found slaveid %d", event->slave_addr);
-            if (cJSON_IsArray(cJSON_GetObjectItem(childDevice, "inputs"))) {
-                // find input
-                childInput = cJSON_GetObjectItem(childDevice, "inputs")->child;
-                while (childInput) {
-                    if (cJSON_GetObjectItem(childInput, "id")->valueint == event->input) {
-                        ESP_LOGD(TAG, "found input %d", event->input);
-                        // input found, get events
-                        if (cJSON_IsArray(cJSON_GetObjectItem(childInput, "events"))) {
-                            childEvent = cJSON_GetObjectItem(childInput, "events")->child;
-                            while (childEvent) {
-                                if (isEquals(cJSON_GetObjectItem(childEvent, "event")->valuestring, event->event)) {
-                                    ESP_LOGD(TAG, "found event %d", event->event);
-                                    act.slave_addr = cJSON_GetObjectItem(childEvent, "slaveid")->valueint;
-                                    act.output = cJSON_GetObjectItem(childEvent, "output")->valueint;
-                                    act.action = getActionValue(cJSON_GetObjectItem(childEvent, "action")->valuestring);
-                                    // do not process action on the same slave
-                                    if (getServiceConfigValueBool("actionslaveproc") && (act.slave_addr == event->slave_addr)) {
-                                        // do nothing
-                                    } else {   
-                                        addAction(act);
-                                    }
-                                }                               
-                                childEvent = childEvent->next;                              
-                            }                           
-                        } 
-                        break;
-                    }
-                    childInput = childInput->next;
-                }
-                // if not input found then return error             
-                break;
-            }           
-        }
-        childDevice = childDevice->next;
-    }
-}
-
 char *getDeviceName(uint8_t slaveId) {
     cJSON *childDevice = devices->child;
     while (childDevice)
@@ -1740,47 +1663,116 @@ void doMBSetCoil(uint8_t slaveid, uint8_t coil, uint8_t value) {
     setCoilQueue(slaveid, coil, value);
 }
 
+void addAction(action_t pAction) {
+    //ESP_LOGI(TAG, "addAction ");
+    if (actions_qty > MAX_ACTIONS) {
+        ESP_LOGE(TAG, "Actions exceed MAX_ACTIONS size");
+        return;
+    }
+    action_t *act = malloc(sizeof(action_t));
+    if (act == NULL) {
+        ESP_LOGE(TAG, "Can't malloc action %d", actions_qty);
+        return;
+    }
+    act->slave_addr = pAction.slave_addr;
+    act->output = pAction.output;
+    act->action = pAction.action;    
+    actions[actions_qty++] = act;
+    
+    // colhoze
+    // action[actions_qty]->slave_addr = pAction.slave_addr;
+    // action[actions_qty]->output = pAction.output;
+    // action[actions_qty]->action = pAction.action;
+    // actions_qty++;
+}
+
 void processActions() {
     // выполнить действия   
     ESP_LOGD(TAG, "processActions qty %d", actions_qty);
+    char buf[MSG_BUFFER];
     for (uint8_t i=0; i<actions_qty; i++) {
-        if (action[i]->slave_addr) {
-            char buf[MSG_BUFFER];
-            sprintf(buf, "Action on device %s (%d), output %s (%d), action %s (%d)", 
-                    getDeviceName(action[i]->slave_addr), action[i]->slave_addr, 
-                    getOutputName(action[i]->slave_addr, action[i]->output), action[i]->output, 
-                    getActionName(action[i]->action), action[i]->action);
-            writeLog("I", buf);
-            // convert to modbus action
-            if (action[i]->action == ACT_TOGGLE) {
-                setHoldingQueue(action[i]->slave_addr, 0xCC, action[i]->output);
-            } else {
-                if (action[i]->action == ACT_ON)
-                    action[i]->action = 1;
-                else if (action[i]->action == ACT_OFF)
-                    action[i]->action = 0;
-                doMBSetCoil(action[i]->slave_addr, action[i]->output, action[i]->action);
-            }
-
-            /*
-            if (action[i]->action == ACT_OFF)
-                action[i]->action = 0;
-            else if (action[i]->action == ACT_ON)
-                action[i]->action = 1;
-            else if (action[i]->action == ACT_TOGGLE) // toggle
-            {
-                // get current value and invert it
-                if (getCoilValue(action[i]->slave_addr, action[i]->output) == 1)
-                    action[i]->action = 0;
-                else
-                    action[i]->action = 1;
-            }
-            doMBSetCoil(action[i]->slave_addr, action[i]->output, action[i]->action);
-            */            
+        // if (actions[i]->slave_addr) {            
+        sprintf(buf, "Action on device %s (%d), output %s (%d), action %s (%d)", 
+                getDeviceName(actions[i]->slave_addr), actions[i]->slave_addr, 
+                getOutputName(actions[i]->slave_addr, actions[i]->output), actions[i]->output, 
+                getActionName(actions[i]->action), actions[i]->action);
+        writeLog("I", buf);
+        // convert to modbus action
+        if (actions[i]->action == ACT_TOGGLE) {
+            setHoldingQueue(actions[i]->slave_addr, 0xCC, actions[i]->output);
         } else {
-            // web action
-            //doWEBAction(action[i]->webMethod, action[i]->webURL);
+            if (actions[i]->action == ACT_ON)
+                actions[i]->action = 1;
+            else if (actions[i]->action == ACT_OFF)
+                actions[i]->action = 0;
+            doMBSetCoil(actions[i]->slave_addr, actions[i]->output, actions[i]->action);
         }
+
+        /*            
+        else if (action[i]->action == ACT_TOGGLE) // toggle
+        {
+            // get current value and invert it
+            if (getCoilValue(action[i]->slave_addr, action[i]->output) == 1)
+                action[i]->action = 0;
+            else
+                action[i]->action = 1;
+        }            
+        */            
+        // clean up
+        free(actions[i]);
+    }   
+    actions_qty = 0;
+}
+
+void processEvent(event_t *event) {
+    // обработка одного события
+    // нужно найти действия
+    if (!cJSON_IsArray(devices) || cJSON_GetArraySize(devices) == 0) {
+        ESP_LOGE(TAG, "devices is not a json array");
+        return;
+    }   
+    action_t act;
+    cJSON *childInput;      
+    cJSON *childDevice = devices->child;
+    cJSON *childEvent;              
+    while (childDevice)
+    {       
+        if (cJSON_GetObjectItem(childDevice, "slaveid")->valueint == event->slave_addr) {
+            ESP_LOGD(TAG, "found slaveid %d", event->slave_addr);
+            if (cJSON_IsArray(cJSON_GetObjectItem(childDevice, "inputs"))) {
+                // find input
+                childInput = cJSON_GetObjectItem(childDevice, "inputs")->child;
+                while (childInput) {
+                    if (cJSON_GetObjectItem(childInput, "id")->valueint == event->input) {
+                        ESP_LOGD(TAG, "found input %d", event->input);
+                        // input found, get events
+                        if (cJSON_IsArray(cJSON_GetObjectItem(childInput, "events"))) {
+                            childEvent = cJSON_GetObjectItem(childInput, "events")->child;
+                            while (childEvent) {
+                                if (isEquals(cJSON_GetObjectItem(childEvent, "event")->valuestring, event->event)) {
+                                    ESP_LOGD(TAG, "found event %d", event->event);
+                                    act.slave_addr = cJSON_GetObjectItem(childEvent, "slaveid")->valueint;
+                                    act.output = cJSON_GetObjectItem(childEvent, "output")->valueint;
+                                    act.action = getActionValue(cJSON_GetObjectItem(childEvent, "action")->valuestring);
+                                    // do not process action on the same slave
+                                    if (getServiceConfigValueBool("actionslaveproc") && (act.slave_addr == event->slave_addr)) {
+                                        // do nothing
+                                    } else {   
+                                        addAction(act);
+                                    }
+                                }                               
+                                childEvent = childEvent->next;                              
+                            }                           
+                        } 
+                        break;
+                    }
+                    childInput = childInput->next;
+                }
+                // if not input found then return error             
+                break;
+            }           
+        }
+        childDevice = childDevice->next;
     }
 }
 
@@ -1821,7 +1813,7 @@ void queryDevice(uint8_t slaveId) {
     uint16_t inputs, outputs;    
     event_t *event = malloc(sizeof(event_t));
     heap_caps_check_integrity_all(true);
-    actions_qty = 0;                
+    //actions_qty = 0;                
     if (executeModbusCommand(slaveId, MB_READ_INPUTREGISTERS, 0, 3, &response) == ESP_OK) {
         changeDevStatus(slaveId, "online");
         changeLEDStatus(LED_NORMAL);
@@ -1935,8 +1927,4 @@ void initLED() {
 
 void changeLEDStatus(uint8_t status) {
     ledStatus = status;
-}
-
-void initCore() {
-    initEventsActions();    
 }
