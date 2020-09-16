@@ -20,6 +20,7 @@ function loadData() {
         $("#dns").val(json.dns);         
         $("#ntpserver").val(json.ntpserver);         
         $("#ntpTZ").val(json.ntpTZ);         
+        $("#otaURL").val(json.otaURL);         
     });    
 }
 
@@ -77,6 +78,7 @@ function saveData() {
     json.hostname = $("#hostname").val();
     json.ntpserver = $("#ntpserver").val();
     json.ntpTZ = $("#ntpTZ").val();   
+    json.otaURL = $("#otaURL").val();   
     console.log(json);
     $.ajax({
         type: "POST",

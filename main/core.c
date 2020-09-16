@@ -7,6 +7,9 @@
 #include "modbus.h"
 #include "utils.h"
 #include "freertos/semphr.h"
+#include "ota.h"
+#include "core.h"
+#include "driver/gpio.h"
 
 static const char *TAG = "CORE";
 static cJSON *networkConfig;
@@ -30,8 +33,12 @@ static cJSON *devices;
 #define MAX_ACTIONS     10
 #define MSG_BUFFER      100
 
+#define STATUS_LED      12
+
 #define  setbit(var, bit)    ((var) |= (1 << (bit)))
 #define  clrbit(var, bit)    ((var) &= ~(1 << (bit)))
+
+uint8_t ledStatus = LED_BOOTING;
 
 typedef enum {
     ACT_NOTHING, // nothing 
@@ -163,6 +170,10 @@ esp_err_t createServiceConfig() {
     return ESP_OK;
 }
 
+void stopPolling() {    
+    cJSON_ReplaceItemInObject(serviceConfig, "pollingTime", cJSON_CreateNumber(0));                      
+}
+
 esp_err_t saveServiceConfig() {
     char *svc = cJSON_Print(serviceConfig);
     esp_err_t err = saveTextFile("/config/serviceconfig.json", svc);
@@ -215,6 +226,8 @@ bool getNetworkConfigValueBool(const char* name) {
 }
 
 char *getNetworkConfigValueString(const char* name) {
+    if (!cJSON_IsString(cJSON_GetObjectItem(networkConfig, name)))    
+        return NULL;
     return cJSON_GetObjectItem(networkConfig, name)->valuestring;
 }
 
@@ -1451,7 +1464,19 @@ esp_err_t uiRouter(httpd_req_t *req) {
         }        
     } else if ((!strcmp(uri, "/ui/log")) && (req->method == HTTP_GET)) {
         err = getLogFile(req);
+    } else if ((!strcmp(uri, "/service/upgrade")) && (req->method == HTTP_POST)) {
+        stopPolling();
+        startOTA();        
+        setText(&response, "OK");
+        err = ESP_OK;        
+    }  else if ((!strcmp(uri, "/ui/version")) && (req->method == HTTP_GET)) {        
+        char *version = getCurrentVersion();
+        setText(&response, version);
+        free(version);
+        err = ESP_OK;
     }
+
+    
 
     // check result
     if (err == ESP_OK) {
@@ -1799,6 +1824,7 @@ void queryDevice(uint8_t slaveId) {
     actions_qty = 0;                
     if (executeModbusCommand(slaveId, MB_READ_INPUTREGISTERS, 0, 3, &response) == ESP_OK) {
         changeDevStatus(slaveId, "online");
+        changeLEDStatus(LED_NORMAL);
         // slaveid, command, start, qty, *response
         //changeDevStatus(slaveId, "online");
         event->slave_addr = slaveId;
@@ -1832,6 +1858,7 @@ void queryDevice(uint8_t slaveId) {
         }
     } else {
         changeDevStatus(slaveId, "offline");
+        changeLEDStatus(LED_ERROR);
     }        
     free(event);
     // обновление входов/выходов
@@ -1854,10 +1881,6 @@ void pollingNew() {
     processQueue(); // накопившиеся действия над выходами
 }
 
-void initCore() {
-    initEventsActions();
-}
-
 SemaphoreHandle_t getSemaphore() {
     return sem_busy;
 }
@@ -1866,28 +1889,54 @@ void createSemaphore() {
     sem_busy = xSemaphoreCreateMutex();
 }
 
-
-/*
-else if (!strcmp(uri, "/ui/getPage")) {
-        char *page = getParamValue(req, "page");
-        if (page == NULL) {
-            err = ESP_FAIL;
-            setErrorText(&response, "Page not defined");            
-        } else {
-            char path[FILE_PATH_MAX];
-            strcpy(path, "/webUI/new/");    // new/
-            strcat(path, page);
-            strcat(path, ".html");
-            free(page);        
-        }       
+void statusLEDTask(void *pvParameter) {    
+    uint8_t l;
+    // led normal  ^^__^^__  0xCC
+    // led error   ^_^_^_^_  0xAA
+    // led booting ^_^_^___  0xA8
+    // led ora     ^^^^____  0xF0
+    uint8_t pattern_normal = 0xCC;
+    uint8_t pattern_error = 0xAA;
+    uint8_t pattern_booting = 0xA8;
+    uint8_t pattern_ota = 0xF0;
+    uint8_t i=0;
+    while(1)
+    {
+        switch (ledStatus) {
+            case LED_BOOTING:
+                l = (pattern_booting >> i) & 0x01;
+                break;
+            case LED_ERROR:
+                l = (pattern_error >> i) & 0x01;
+                break;
+            case LED_NORMAL:
+                l = (pattern_normal >> i) & 0x01;    
+                break;
+            case LED_OTA:
+                l = (pattern_ota >> i) & 0x01;    
+                break;
+            default:
+                l = 0;
+        }
+        
+        if (i++ > 7)
+            i=0;        
+        gpio_set_level(STATUS_LED, l);
+        vTaskDelay(1000 / 4 / portTICK_RATE_MS); // every 250ms
     }
+}
 
+void initLED() {
+    gpio_pad_select_gpio(STATUS_LED);
+    gpio_set_direction(STATUS_LED, GPIO_MODE_OUTPUT);
+    gpio_set_level(STATUS_LED, 0);
+    xTaskCreate(&statusLEDTask, "statusLEDTask", 4096, NULL, 5, NULL);        
+}
 
-    char buf[17];    
-    itoa(bootId, buf, 10);
-    char path[50];
-    strcpy(path, "/logs/");    
-    strcat(path, buf);
-    strcat(path, ".txt");
-    return getFileWeb(path, req);
-*/
+void changeLEDStatus(uint8_t status) {
+    ledStatus = status;
+}
+
+void initCore() {
+    initEventsActions();    
+}

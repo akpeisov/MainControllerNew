@@ -53,7 +53,9 @@ void modBusTask(void *pvParameter) {
     while(1)
     {     
         pollingTime = getServiceConfigValueInt("pollingTime");                         
-        
+        if (pollingTime == 0) {
+            break;
+        }
         if (xSemaphoreTake(sem, portMAX_DELAY) == pdTRUE)
         {
             //ESP_LOGI(TAG, "modBus task semaphore working");
@@ -66,12 +68,14 @@ void modBusTask(void *pvParameter) {
         }        
         vTaskDelay(pollingTime / portTICK_RATE_MS);        
     }
-    vSemaphoreDelete(sem);
+    //vSemaphoreDelete(sem);
     vTaskDelete(NULL);
 }
 
 void app_main(void)
 {
+    initLED();
+    changeLEDStatus(LED_BOOTING);
     initStorage();
     loadConfig();
     if (initNetwork() == ESP_OK) {
@@ -79,9 +83,12 @@ void app_main(void)
     }
     mbInit();
     initCore();
+    //initOTA();
     //sem_busy = xSemaphoreCreateMutex();
     createSemaphore();
     xTaskCreate(&wdtMemoryTask, "wdtMemoryTask", 4096, NULL, 5, NULL);
     xTaskCreate(&modBusTask, "modBusTask", 4096, NULL, 5, NULL);        
+
+    changeLEDStatus(LED_NORMAL);
     writeLog("I", "System started");
 }

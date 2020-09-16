@@ -43,3 +43,24 @@ function reboot() {
         });
     }
 }
+
+function upgrade() {
+    if (confirm('Are you sure you want to upgrade device?')) {
+        $.ajax({
+            type: "POST",
+            url: "/service/upgrade",
+            contentType: "text/json; charset=utf-8",            
+            dataType: "text",
+            success: function (msg, status, jqXHR) {
+                if (status == "error") {
+                    var msg = "Error: ";
+                    $( "#error" ).html( msg + xhr.status + " " + xhr.statusText );
+                    $("#content").html("");                 
+                } else {
+                    // load default data                                        
+                    $( "#error" ).html("");
+                }     
+            }
+        });
+    }
+}

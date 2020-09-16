@@ -7,5 +7,7 @@ idf_component_register(SRCS "main.c"
                             "network.c"
                             "webServer.c"
                             "modbus.c"
-                       INCLUDE_DIRS ".")
+                            "ota.c"
+                       INCLUDE_DIRS "."
+                       EMBED_TXTFILES ${project_dir}/server_certs/ca_cert.pem)
 
