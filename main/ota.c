@@ -114,6 +114,7 @@ void otaTask(void *pvParameter)
     }
 
 ota_end:
+    taskState = false;
     ota_finish_err = esp_https_ota_finish(https_ota_handle);
     if ((err == ESP_OK) && (ota_finish_err == ESP_OK)) {
         ESP_LOGI(TAG, "ESP_HTTPS_OTA upgrade successful. Rebooting ...");

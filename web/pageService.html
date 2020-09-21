@@ -18,9 +18,14 @@
             <td><input class="txtStr" type="text" id="readtimeout" maxlength="5" value="" title="Timeout for read packet"></td>
             </tr>
             <tr>
-            <td><label>Polling retries before exclude</label></td>
+            <td><label>Polling retries before device offline</label></td>
             <td>&nbsp;</td>
-            <td><input class="txtStr" type="text" id="pollingRetries" maxlength="2" value=""></td>
+            <td><input class="txtStr" type="text" id="pollingRetries" maxlength="5" value=""></td>
+            </tr>
+            <tr>
+            <td><label>Wait retries before polling offline device</label></td>
+            <td>&nbsp;</td>
+            <td><input class="txtStr" type="text" id="waitingRetries" maxlength="5" value=""></td>
             </tr>
             <tr>
             <td><label>Don't process action on the same slave</label></td>

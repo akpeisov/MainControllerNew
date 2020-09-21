@@ -6,6 +6,7 @@ function loadData() {
     	$("#pollingTime").val(json.pollingTime); 
     	$("#pollingTimeout").val(json.pollingTimeout); 
     	$("#pollingRetries").val(json.pollingRetries); 
+    	$("#waitingRetries").val(json.waitingRetries); 
     	$("#savePeriod").val(json.savePeriod); 
     	// $("#httpEnable").prop("checked", json.httpEnable);
     	$("#httpsEnable").prop("checked", json.httpsEnable);
@@ -18,8 +19,6 @@ function loadData() {
         $("#readtimeout").val(json.readtimeout);         
         $("#actionslaveproc").prop("checked", json.actionslaveproc);        
     }); 
-
-
 }
 
 function saveData() {
@@ -28,6 +27,7 @@ function saveData() {
 	json.pollingTime = parseInt($("#pollingTime").val());
 	json.pollingTimeout = parseInt($("#pollingTimeout").val());
 	json.pollingRetries = parseInt($("#pollingRetries").val());
+	json.waitingRetries = parseInt($("#waitingRetries").val());
 	json.savePeriod = parseInt($("#savePeriod").val());
 	// json.httpEnable = $("#httpEnable").prop("checked");
 	json.httpsEnable = $("#httpsEnable").prop("checked");

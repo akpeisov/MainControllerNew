@@ -161,11 +161,28 @@ bool checkCRC(uint8_t *data, uint8_t len) {
     return (data[len-2] == (uint8_t)crc && data[len-1] == (uint8_t)(crc>>8));
 }
 
+char* getMBError(uint8_t err) {
+    switch (err) {
+        case MB_OK:
+            return "OK";
+        case MB_SEND_FAILED:
+            return "Send failed";
+        case MB_RECEIVE_ERROR:
+            return "Receive error";
+        case MB_RECEIVE_TIMEOUT:
+            return "Receive timeout";
+        case MB_CHECKSUM_ERROR:
+            return "Checksum error";
+        case MB_ERROR_CODE:
+            return "Modbus internal error";
+    }
+    return "unknown";
+}
+
 send_packet_res_t sendPacket(uint8_t *txData, uint8_t txLen_, uint8_t **rxData, uint8_t *rxLen) {
     // send data    
     // add crc
-    uint8_t txLen = txLen_;
-    // ESP_LOGI(TAG, "txLen %d", txLen);
+    uint8_t txLen = txLen_;    
     // ESP_LOG_BUFFER_HEXDUMP("txData", txData, txLen, CONFIG_LOG_DEFAULT_LEVEL);
     uint16_t crc = calcModbusCRC(txData, txLen);    
     txData[txLen++] = crc;
@@ -176,25 +193,10 @@ send_packet_res_t sendPacket(uint8_t *txData, uint8_t txLen_, uint8_t **rxData, 
         return MB_SEND_FAILED;
     }
     // receive data        
-    uint8_t* dtmp = (uint8_t*) malloc(BUF_SIZE); 
-    bzero(dtmp, BUF_SIZE);
-    *rxLen = uart_read_bytes(MB_PORT_NUM, dtmp, BUF_SIZE, readTimeOut / portTICK_RATE_MS);    
-    
-/*
-    dtmp[0] = 0x01;
-    dtmp[1] = 0x06;
-    dtmp[2] = 0x00;
-    dtmp[3] = 0x00;
-    dtmp[4] = 0x00;
-    dtmp[5] = 0xCC;
-    dtmp[6] = 0x89;
-    dtmp[7] = 0x9F; 
-    *rxLen = 8;   
-*/
-    *rxData = dtmp;
+    *rxData = (uint8_t*) malloc(BUF_SIZE); 
+    bzero(*rxData, BUF_SIZE);
+    *rxLen = uart_read_bytes(MB_PORT_NUM, *rxData, BUF_SIZE, readTimeOut / portTICK_RATE_MS);    
 
-    //*rxLen = uart_read_bytes(MB_PORT_NUM, rxData, BUF_SIZE, readTimeOut / portTICK_RATE_MS);    
-    // uart_flush(MB_PORT_NUM);
     // check crc
     if (*rxLen == 0) {
         return MB_RECEIVE_TIMEOUT;
@@ -210,11 +212,31 @@ send_packet_res_t sendPacket(uint8_t *txData, uint8_t txLen_, uint8_t **rxData, 
 }
 
 esp_err_t my_master_send_request(mb_param_t* request) {    
-    uint8_t txLen = 4 + request->reg_size*2; // addres + cmd + start + start + values + ... + crc
-    if (request->command == MB_WRITE_MULTI_REGISTER) {
-        txLen += 1+2;
+    uint8_t txLen = 0;
+    switch (request->command) {        
+        case MB_READ_COILS:          
+        case MB_READ_INPUTS:
+        case MB_READ_HOLDINGS:
+        case MB_READ_INPUTREGISTERS:
+        case MB_WRITE_SINGLECOIL:
+        case MB_WRITE_REGISTER:
+            txLen = 6;
+            break;
+        case MB_WRITE_MULTI_REGISTER:
+            txLen = 7 + request->reg_size / 8;
+            if (request->reg_size % 8 > 0)
+                txLen++;
+            break;
+        case MB_WRITE_MULTI_COILS:
+            txLen = 7 + request->reg_size * 2;
+            break;
+        default:  
+            break;          
     }
-    //uint8_t bufSize = 5;
+    if (txLen == 0) {
+        return ESP_FAIL;
+    }
+
     uint8_t *txData = (uint8_t*)malloc(txLen+2); //+2 for CRC
     // heap_caps_check_integrity_all(true);
     if (txData == NULL) {
@@ -238,44 +260,19 @@ esp_err_t my_master_send_request(mb_param_t* request) {
         for (uint8_t i=0;i<request->reg_size;i++) {
             txData[7+i] = request->values[0] >> 8;
             txData[7+i+1] = (uint8_t)request->values[0];
-        }
-        txLen = 6 + request->reg_size*2 + 1;
+        }        
     } else if (request->command == MB_WRITE_MULTI_COILS) {
-        // not inmplemented yet        
-        //bufSize += request->reg_size*2;
-        //txLen = 6; // HZ
+        // not inmplemented yet                
         free(txData);        
         return ESP_FAIL;
     }
         
-    uint8_t *rxData;// = malloc(BUF_SIZE); 
+    uint8_t *rxData;
     heap_caps_check_integrity_all(true);  
-    /*
-    if (rxData == NULL) {
-        ESP_LOGE(TAG, "Can't allocate buffer for rxData");
-        free(txData);
-        return ESP_FAIL;
-    }
-    */
-    // memset(rxData, 0, BUF_SIZE);
+    
     uint8_t rxLen = 0;
     send_packet_res_t err = sendPacket(txData, txLen, &rxData, &rxLen);
-    //send_packet_res_t err = MB_RECEIVE_TIMEOUT;
-
-//
-    // rxData = (uint8_t*)malloc(BUF_SIZE);
-    // rxData[0] = 0x01;
-    // rxData[1] = 0x06;
-    // rxData[2] = 0x00;
-    // rxData[3] = 0x00;
-    // rxData[4] = 0x00;
-    // rxData[5] = 0xCC;
-    // rxData[6] = 0x89;
-    // rxData[7] = 0x9F; 
-    // rxLen = 8;   
-    // send_packet_res_t err = MB_OK;
-//
-
+    
     if (err == MB_OK) {
         // everything is ok, return values    
         // check for error
@@ -308,7 +305,7 @@ esp_err_t my_master_send_request(mb_param_t* request) {
         ESP_LOGE(TAG, "Error while sending request");                
         ESP_LOG_BUFFER_HEXDUMP("txData", txData, txLen, CONFIG_LOG_DEFAULT_LEVEL);
     } else if (err != MB_OK) {
-        ESP_LOGE(TAG, "Error while getting response. Errcode %d", err);
+        ESP_LOGE(TAG, "Error while getting response. Errcode %d, %s. txLen %d", err, getMBError(err), txLen);        
         ESP_LOG_BUFFER_HEXDUMP("txData", txData, txLen, CONFIG_LOG_DEFAULT_LEVEL);
         ESP_LOG_BUFFER_HEXDUMP("rxData", rxData, rxLen, CONFIG_LOG_DEFAULT_LEVEL);
     }
@@ -322,17 +319,6 @@ esp_err_t my_master_send_request(mb_param_t* request) {
         return ESP_FAIL;
     return ESP_OK;   
 }
-
-// mb_param_t* getQueue() { 
-//     // вернет указатель на очередную запись запроса
-//     for (uint8_t i=0; i<MAX_REQUESTS; i++) {
-//         if (mbQueue[i] != NULL) {
-//             ESP_LOGI(TAG, "Queue num %d", i);
-//             return mbQueue[i];
-//         }        
-//     }
-//     return NULL;
-// }
 
 bool getQueue(mb_param_t** param, uint8_t *indx) { 
     for (uint8_t i=0; i<MAX_REQUESTS; i++) {
@@ -435,29 +421,30 @@ void processQueue() {
     AA - hi byte address, aa - lo byte address
     CC - hi byte count, cc - lo byte address
     CR - crc
+    01 02 03 04 05 06 07 08 09
     01 read coils
-    02 01 AA aa CC cc CR CR 
+    02 01 AA aa CC cc CR CR   -- always 8 
     02 01 BC ab cd CR CR   BC - byte count, ab cd - data
     02 read discrete inputs
-    02 02 AA aa CC cc CR CR
+    02 02 AA aa CC cc CR CR   -- always 8
     02 02 BC ab cd CR CR   BC - byte count, ab cd - data
     03 read holding
-    02 03 AA aa CC cc CR CR
+    02 03 AA aa CC cc CR CR   -- always 8
     02 03 BC ab cd CR CR   BC - byte count, ab cd - data
-    04 read input registers
-    02 04 AA aa CC cc CR CR
+    04 read input registers   -- 
+    02 04 AA aa CC cc CR CR   -- always 8
     02 04 BC ab cd CR CR   BC - byte count, ab cd - data
-    05 write single coil
-    02 05 AA aa 00 FF CR CR  -- 00 FF - set 00 00 clear
+    05 write single coil 
+    02 05 AA aa 00 FF CR CR  -- 00 FF - set 00 00 clear   -- always 8 bytes
     02 05 AA aa 00 FF CR CR  answer the same
     06 write register
-    02 06 AA aa VV VV CR CR
+    02 06 AA aa VV VV CR CR  -- always 8 bytes
     02 06 AA aa VV VV CR CR  answer the same
     0F write coils hz kak tut
-    02 0F AA aa CC cc MM MM CR CR  MM - bit mask set
+    02 0F AA aa CC cc MM MM CR CR  MM - bit mask set   -- 9 + len/8 + if (len % 8 > 0) +1
     02 0F AA aa CC cc CR CR
     10 write registers
-    02 10 00 0b 00 02 04 01 02 03 04 CC CC
+    02 10 00 0b 00 02 04 01 02 03 04 CC CC    -- 9 + len *2
     02 10 00 0b 00 02 CC CC
 
     //                                    adr cmd len dta crc

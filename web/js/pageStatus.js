@@ -29,3 +29,6 @@ intervalId = setInterval(function(){
     else
         clearInterval(intervalId);
 }, 1000);
+
+
+$("#version").load(root + '/ui/version');

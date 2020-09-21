@@ -156,7 +156,8 @@ esp_err_t createServiceConfig() {
     serviceConfig = cJSON_CreateObject();
     cJSON_AddItemToObject(serviceConfig, "pollingTime", cJSON_CreateNumber(5000));
     cJSON_AddItemToObject(serviceConfig, "pollingTimeout", cJSON_CreateNumber(100));
-    cJSON_AddItemToObject(serviceConfig, "pollingRetries", cJSON_CreateNumber(5));
+    cJSON_AddItemToObject(serviceConfig, "pollingRetries", cJSON_CreateNumber(100));
+    cJSON_AddItemToObject(serviceConfig, "waitingRetries", cJSON_CreateNumber(100));    
     cJSON_AddItemToObject(serviceConfig, "savePeriod", cJSON_CreateNumber(60));
     cJSON_AddItemToObject(serviceConfig, "httpEnable", cJSON_CreateTrue());
     cJSON_AddItemToObject(serviceConfig, "httpsEnable", cJSON_CreateTrue());
@@ -214,10 +215,14 @@ esp_err_t loadConfig() {
 }
 
 uint16_t getServiceConfigValueInt(const char* name) {
+    if (!cJSON_IsNumber(cJSON_GetObjectItem(serviceConfig, name)))    
+        return 0;
     return cJSON_GetObjectItem(serviceConfig, name)->valueint;
 }
 
 uint16_t getNetworkConfigValueInt(const char* name) {
+    if (!cJSON_IsNumber(cJSON_GetObjectItem(networkConfig, name)))    
+        return 0;
     return cJSON_GetObjectItem(networkConfig, name)->valueint;
 }
 
@@ -1776,6 +1781,20 @@ void processEvent(event_t *event) {
     }
 }
 
+char* getDeviceStatus(uint8_t slaveId) {
+    cJSON *childDevice = devices->child;
+    while (childDevice) {
+        if (cJSON_GetObjectItem(childDevice, "slaveid")->valueint == slaveId) {
+            if (!cJSON_IsString(cJSON_GetObjectItem(childDevice, "status"))) {
+                return "offline";
+            }
+            return cJSON_GetObjectItem(childDevice, "status")->valuestring;
+        }
+        childDevice = childDevice->next;
+    }
+    return "offline";
+}
+
 void changeDevStatus(uint8_t slaveId, char* status) {
     // выставить флаг онлайн устройству
     ESP_LOGD(TAG, "slaveid %d, status %s", slaveId, status);
@@ -1804,10 +1823,102 @@ char isEqualsVals(uint8_t *val1, uint8_t *val2, uint8_t len) {
     return 1;    
 }
 
+uint16_t decDeviceWaitingRetries(uint8_t slaveId) {
+    // уменьшить счетчик числа ожиданий для оффлайн устройства при поллинге. Вернет оставшееся кол-во ожиданий
+    uint16_t curRetries = 0;
+    cJSON *childDevice = devices->child;
+    while (childDevice) {
+        if (cJSON_GetObjectItem(childDevice, "slaveid")->valueint == slaveId) {
+            if (!cJSON_IsNumber(cJSON_GetObjectItem(childDevice, "waitingRetries"))) {
+                // если не было параметра с попытками - создать и установить макс значение
+                cJSON_AddItemToObject(childDevice, "waitingRetries", 
+                                      cJSON_CreateNumber(getServiceConfigValueInt("waitingRetries")));                
+            }
+            curRetries = cJSON_GetObjectItem(childDevice, "waitingRetries")->valueint;
+            if (curRetries == 0) {
+                // если не останется ничего, то ничего не делаем
+                return 0;
+            }
+            cJSON_ReplaceItemInObject(childDevice, "waitingRetries", cJSON_CreateNumber(--curRetries));
+            break;
+        }
+        childDevice = childDevice->next;
+    }
+    return curRetries;
+}
+
+void resetDeviceWaitingRetries(uint8_t slaveId) {
+    cJSON *childDevice = devices->child;
+    while (childDevice) {
+        if (cJSON_GetObjectItem(childDevice, "slaveid")->valueint == slaveId) {
+            if (!cJSON_IsNumber(cJSON_GetObjectItem(childDevice, "waitingRetries"))) {
+                // если не было параметра с попытками - создать и установить макс значение
+                cJSON_AddItemToObject(childDevice, "waitingRetries", 
+                                      cJSON_CreateNumber(getServiceConfigValueInt("waitingRetries")));
+            }            
+            cJSON_ReplaceItemInObject(childDevice, "waitingRetries", 
+                                      cJSON_CreateNumber(getServiceConfigValueInt("waitingRetries")));
+            break;
+        }
+        childDevice = childDevice->next;
+    }
+}
+
+uint16_t decDevicePollingRetries(uint8_t slaveId) {
+    // уменьшить счетчик числа обращений к усройству. Вернет оставшееся кол-во обращений    
+    uint16_t curRetries = 0;
+    cJSON *childDevice = devices->child;
+    while (childDevice) {
+        if (cJSON_GetObjectItem(childDevice, "slaveid")->valueint == slaveId) {
+            if (!cJSON_IsNumber(cJSON_GetObjectItem(childDevice, "pollingRetries"))) {
+                // если не было параметра с попытками - создать и установить макс значение
+                cJSON_AddItemToObject(childDevice, "pollingRetries", 
+                                      cJSON_CreateNumber(getServiceConfigValueInt("pollingRetries")));                
+            }
+            curRetries = cJSON_GetObjectItem(childDevice, "pollingRetries")->valueint;
+            if (curRetries == 0) {
+                // если не останется ничего, то ничего не делаем
+                return 0;
+            }
+            cJSON_ReplaceItemInObject(childDevice, "pollingRetries", cJSON_CreateNumber(--curRetries));
+            break;
+        }
+        childDevice = childDevice->next;
+    }
+    return curRetries;
+}
+
+void resetDevicePollingRetries(uint8_t slaveId) {
+    cJSON *childDevice = devices->child;
+    while (childDevice) {
+        if (cJSON_GetObjectItem(childDevice, "slaveid")->valueint == slaveId) {
+            if (!cJSON_IsNumber(cJSON_GetObjectItem(childDevice, "pollingRetries"))) {
+                // если не было параметра с попытками - создать и установить макс значение
+                cJSON_AddItemToObject(childDevice, "pollingRetries", 
+                                      cJSON_CreateNumber(getServiceConfigValueInt("pollingRetries")));
+            }            
+            cJSON_ReplaceItemInObject(childDevice, "pollingRetries", 
+                                      cJSON_CreateNumber(getServiceConfigValueInt("pollingRetries")));
+            break;
+        }
+        childDevice = childDevice->next;
+    }
+}
+
 void queryDevice(uint8_t slaveId) {
     // опрос устройства
     // экспериментальный вариант
     // ESP_LOGI(TAG, "queryDevice slaveId %d", slaveId);
+    if (!strcmp(getDeviceStatus(slaveId), "offline")) { // (decDevicePollingRetries(slaveId) == 0) {
+        // если текущий девайс в оффлайне, то полить реже
+        if (decDeviceWaitingRetries(slaveId) > 0) {
+            return;
+        } else {
+            // дождались своей очереди, можно пробовать опрос
+            resetDeviceWaitingRetries(slaveId);
+        }
+    }
+
     uint8_t *response = NULL;
     static uint8_t response1[6], response2[6], response3[6];
     uint16_t inputs, outputs;    
@@ -1816,6 +1927,7 @@ void queryDevice(uint8_t slaveId) {
     //actions_qty = 0;                
     if (executeModbusCommand(slaveId, MB_READ_INPUTREGISTERS, 0, 3, &response) == ESP_OK) {
         changeDevStatus(slaveId, "online");
+        resetDevicePollingRetries(slaveId);
         changeLEDStatus(LED_NORMAL);
         // slaveid, command, start, qty, *response
         //changeDevStatus(slaveId, "online");
@@ -1849,8 +1961,11 @@ void queryDevice(uint8_t slaveId) {
             ESP_LOGE(TAG, "Empty response");
         }
     } else {
-        changeDevStatus(slaveId, "offline");
-        changeLEDStatus(LED_ERROR);
+        // уменьшить счетчик обращений
+        if (decDevicePollingRetries(slaveId) == 0) {
+            changeDevStatus(slaveId, "offline");    
+        }        
+        //changeLEDStatus(LED_ERROR);
     }        
     free(event);
     // обновление входов/выходов
@@ -1928,3 +2043,6 @@ void initLED() {
 void changeLEDStatus(uint8_t status) {
     ledStatus = status;
 }
+
+// Если девай отвалился, пробуем его опросить Х раз и если не ответил, оффлайн
+// По оффлайн девайсам смотреть признак поллинга и полить раз в У времени или попыток и если ответил - выводить в онлайн
