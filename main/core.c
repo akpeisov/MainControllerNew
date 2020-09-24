@@ -521,7 +521,7 @@ esp_err_t getOutputs(char **response, unsigned char slaveId) {
     return ESP_FAIL;    
 }
 
-// Обновление данных выходов по slaveid
+// Обновление данных выходов по slaveid для UI!!!
 // /device?slaveid=1 
 esp_err_t setOutputs(char **response, unsigned char slaveId, char *content) {   
     // set outputs
@@ -1093,6 +1093,29 @@ esp_err_t setOutput(char **response, uint8_t slaveId, uint8_t outputId, uint8_t 
     return ESP_OK;  
 }
 
+esp_err_t switchOutput(char **response, char *content) {       
+    // на вход прилетает JSON, в котором описано что делать с конкретным выходом
+    ESP_LOGI(TAG, "switchOutput");
+
+    if (!cJSON_IsObject(devices) && !cJSON_IsArray(devices)) {
+        setErrorText(response, "devices is not a json");
+        return ESP_FAIL;        
+    }
+
+    //new data
+    cJSON *data = cJSON_Parse(content);
+    if(!cJSON_IsObject(data))
+    {
+        setErrorText(response, "Content is't a json");
+        return ESP_FAIL;
+    }
+        
+
+    return setOutput(response, cJSON_GetObjectItem(data, "slaveid")->valueint,
+                     cJSON_GetObjectItem(data, "output")->valueint,
+                     cJSON_GetObjectItem(data, "action")->valueint);
+}
+
 esp_err_t getServiceConfig(char **response) {
     ESP_LOGI(TAG, "getServiceConfig");
     if (!cJSON_IsObject(serviceConfig) && !cJSON_IsArray(serviceConfig)) {      
@@ -1429,6 +1452,11 @@ esp_err_t uiRouter(httpd_req_t *req) {
         } else {
             err = ESP_FAIL;
             setErrorText(&response, "No slaveid");            
+        }
+    } else if (!strcmp(uri, "/ui/switchOutput")) {
+        err = getContent(&content, req);
+        if (err == ESP_OK) {
+            err = switchOutput(&response, content);
         }
     } else if (!strcmp(uri, "/service/config/service")) {
         if (req->method == HTTP_GET) {
