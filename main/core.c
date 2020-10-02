@@ -1109,7 +1109,19 @@ esp_err_t switchOutput(char **response, char *content) {
         setErrorText(response, "Content is't a json");
         return ESP_FAIL;
     }
-        
+
+    if (!cJSON_IsNumber(cJSON_GetObjectItem(data, "slaveid"))) {
+        setErrorText(response, "No slaveid!");
+        return ESP_FAIL;
+    }
+    if (!cJSON_IsNumber(cJSON_GetObjectItem(data, "output"))) {
+        setErrorText(response, "No output!");
+        return ESP_FAIL;
+    }
+    if (!cJSON_IsNumber(cJSON_GetObjectItem(data, "action"))) {
+        setErrorText(response, "No action!");
+        return ESP_FAIL;
+    }        
 
     return setOutput(response, cJSON_GetObjectItem(data, "slaveid")->valueint,
                      cJSON_GetObjectItem(data, "output")->valueint,
