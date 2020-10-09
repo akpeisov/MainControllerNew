@@ -16,6 +16,7 @@ var newInputRow = {
 var newOutputRow = {
         "id": 0,        
         "name": "",
+        "room": "",
         "curVal": 0                       
       };      
 var newEventRow = {
@@ -315,6 +316,8 @@ function outputsTable(slaveid) {
 
         {title:"ID", field:"id",editor:true,validator:"required"},
         {title:"Name", field:"name",editor:true,validator:"required"},                        
+        {title:"Room", field:"room",editor:true,validator:"required"},                        
+        {title:"Alice", field:"alice",editor:true,formatter:"tick"},
         {title:"Status", field:"curVal"},        
         //{title:"Delete", formatter:"buttonCross", cellClick:function(e, cell){if(confirm('Are you sure you want to delete this entry?')) cell.getRow().delete();}},
         ],

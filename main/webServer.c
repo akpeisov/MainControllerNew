@@ -127,7 +127,7 @@ esp_err_t getContent(char **dst, httpd_req_t *req) {
     return ESP_OK;    
 }
 
-static esp_err_t rest_common_get_handler(httpd_req_t *req) {
+static esp_err_t file_get_handler(httpd_req_t *req) {
     return getFileWeb(req);
 }
 
@@ -141,9 +141,25 @@ static esp_err_t ui_handler(httpd_req_t *req) {
     return ESP_OK;
 }
 
-static esp_err_t api_handler(httpd_req_t *req) {    
-    ESP_LOGI(TAG, "Test api %s", req->uri);        
-    return ESP_OK;
+static esp_err_t http_router(httpd_req_t *req) {
+    // main http router
+    if (!strncmp(req->uri, "/service/upload/", 16) && req->method == HTTP_POST) {
+        return setFileWeb(req);
+    } 
+    if (!strncmp(req->uri, "/service/", 9)) {
+        return ui_handler(req);
+    }  
+    if (!strncmp(req->uri, "/ui/", 4)) {
+        return ui_handler(req);
+    }  
+    if (!strncmp(req->uri, "/v1.0", 5)) {
+        return ui_handler(req);
+    }  
+    if (!strncmp(req->uri, "/alice/", 7)) {
+        return ui_handler(req);
+    }  
+    
+    return file_get_handler(req);
 }
 
 esp_err_t startWebserver()
@@ -163,55 +179,71 @@ esp_err_t startWebserver()
         return ESP_FAIL;
     }
     
-    httpd_uri_t file_service_post = {
-        .uri       = "/service/upload/*",  
-        .method    = HTTP_POST,
-        .handler   = setFileWeb
-    };    
-    httpd_register_uri_handler(server, &file_service_post);
-
-    httpd_uri_t file_service_config_get = {
-        .uri       = "/service/config/*",  
-        .method    = HTTP_GET,
-        .handler   = ui_handler
-    };
-    httpd_register_uri_handler(server, &file_service_config_get);
-
-    httpd_uri_t file_service_config_post = {
-        .uri       = "/service/*",  
-        .method    = HTTP_POST,
-        .handler   = ui_handler
-    };
-    httpd_register_uri_handler(server, &file_service_config_post);
-
-    httpd_uri_t ui_get_uri = {
-        .uri = "/ui/*",
-        .method = HTTP_GET,
-        .handler = ui_handler
-    };
-    httpd_register_uri_handler(server, &ui_get_uri);
-
-    httpd_uri_t ui_post_uri = {
-        .uri = "/ui/*",
-        .method = HTTP_POST,
-        .handler = ui_handler
-    };
-    httpd_register_uri_handler(server, &ui_post_uri);
-
-    httpd_uri_t api_uri = {
-        .uri = "/api/*",
-        .method = HTTP_GET,
-        .handler = api_handler
-    };
-    httpd_register_uri_handler(server, &api_uri);
-
-    /* URI handler for getting web server files */
-    httpd_uri_t common_get_uri = {
+    httpd_uri_t get_uri = {
         .uri = "/*",
         .method = HTTP_GET,
-        .handler = rest_common_get_handler
+        .handler = http_router
     };    
-    httpd_register_uri_handler(server, &common_get_uri);
+    httpd_register_uri_handler(server, &get_uri);
+    
+    httpd_uri_t post_uri = {
+        .uri = "/*",
+        .method = HTTP_POST,
+        .handler = http_router
+    };    
+    httpd_register_uri_handler(server, &post_uri);
+
+    httpd_uri_t head_uri = {
+        .uri = "/*",
+        .method = HTTP_HEAD,
+        .handler = http_router
+    };    
+    httpd_register_uri_handler(server, &head_uri);
+
+
+    // httpd_uri_t file_service_post = {
+    //     .uri       = "/service/upload/*",  
+    //     .method    = HTTP_POST,
+    //     .handler   = setFileWeb
+    // };    
+    // httpd_register_uri_handler(server, &file_service_post);
+        
+    // httpd_uri_t file_service_config_get = {
+    //     .uri       = "/service/config/*",  
+    //     .method    = HTTP_GET,
+    //     .handler   = ui_handler
+    // };
+    // httpd_register_uri_handler(server, &file_service_config_get);
+
+    // httpd_uri_t file_service_config_post = {
+    //     .uri       = "/service/*",  
+    //     .method    = HTTP_POST,
+    //     .handler   = ui_handler
+    // };
+    // httpd_register_uri_handler(server, &file_service_config_post);
+
+    // httpd_uri_t ui_get_uri = {
+    //     .uri = "/ui/*",
+    //     .method = HTTP_GET,
+    //     .handler = ui_handler
+    // };
+    // httpd_register_uri_handler(server, &ui_get_uri);
+
+    // httpd_uri_t ui_post_uri = {
+    //     .uri = "/ui/*",
+    //     .method = HTTP_POST,
+    //     .handler = ui_handler
+    // };
+    // httpd_register_uri_handler(server, &ui_post_uri);
+
+    // /* URI handler for getting web server files */
+    // httpd_uri_t file_get_uri = {
+    //     .uri = "/*",
+    //     .method = HTTP_GET,
+    //     .handler = file_get_handler
+    // };    
+    // httpd_register_uri_handler(server, &file_get_uri);
+
     ESP_LOGI(TAG, "WebServer started");
     return ESP_OK;
 }

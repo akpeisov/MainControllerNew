@@ -324,6 +324,72 @@ esp_err_t getDevicesTree(char **response) {
     return ESP_OK;
 }
 
+esp_err_t getDevicesAlice(char **response, char* requestId) {
+    // for alice
+    if (!cJSON_IsObject(devices) && !cJSON_IsArray(devices)) {
+        setErrorText(response, "devices is not a json");
+        return ESP_FAIL;
+    }    
+    uint8_t count = cJSON_GetArraySize(devices);
+    if(count < 1)
+    {
+        // if empty array
+        *response = "";
+        return ESP_OK;
+    }
+
+    cJSON *devAlice = cJSON_CreateObject();
+    cJSON_AddItemToObject(devAlice, "request_id", cJSON_CreateString(requestId));
+
+    cJSON *payload = cJSON_CreateObject();
+    cJSON_AddItemToObject(payload, "user_id", cJSON_CreateString("esp"));
+
+    cJSON *devs = cJSON_CreateArray();
+
+    cJSON *childDevice = devices->child;
+    while (childDevice) {
+        cJSON *childOutput = cJSON_GetObjectItem(childDevice, "outputs")->child;
+        while (childOutput) {
+            if (cJSON_IsTrue(cJSON_GetObjectItem(childOutput, "alice"))) {
+                cJSON *dev = cJSON_CreateObject();
+                //char* idStr = malloc(6);
+                char idStr[10] = {'\0'};
+                sprintf(idStr, "%d-%d", cJSON_GetObjectItem(childDevice, "slaveid")->valueint, cJSON_GetObjectItem(childOutput, "id")->valueint);
+                cJSON_AddItemToObject(dev, "id", cJSON_CreateString(idStr));
+                // free(idStr);
+                //cJSON_AddItemToObject(dev, "id", cJSON_CreateString(cJSON_GetObjectItem(childDevice, "slaveid")->valuestring)); // TODO : add number
+                //cJSON_AddItemToObject(dev, "name", cJSON_GetObjectItem(childOutput, "name"));
+                //cJSON_AddItemToObject(dev, "description", cJSON_GetObjectItem(childOutput, "name"));
+                //cJSON_AddItemToObject(dev, "room", cJSON_GetObjectItem(childOutput, "room"));
+                cJSON_AddItemToObject(dev, "name", cJSON_CreateString(cJSON_GetObjectItem(childOutput, "name")->valuestring));
+                cJSON_AddItemToObject(dev, "description", cJSON_CreateString(cJSON_GetObjectItem(childOutput, "name")->valuestring));
+                cJSON_AddItemToObject(dev, "room", cJSON_CreateString(cJSON_GetObjectItem(childOutput, "room")->valuestring));
+
+                cJSON_AddItemToObject(dev, "type", cJSON_CreateString("devices.types.light"));
+                cJSON *cdata = cJSON_CreateObject();
+                cJSON_AddItemToObject(cdata, "slaveid", cJSON_CreateNumber(cJSON_GetObjectItem(childDevice, "slaveid")->valueint));
+                cJSON_AddItemToObject(cdata, "output", cJSON_CreateNumber(cJSON_GetObjectItem(childOutput, "id")->valueint));
+                cJSON_AddItemToObject(dev, "custom_data", cdata);
+                cJSON *capabilities = cJSON_CreateArray();
+                cJSON *capability = cJSON_CreateObject();
+                cJSON_AddItemToObject(capability, "type", cJSON_CreateString("devices.capabilities.on_off"));
+                cJSON_AddItemToArray(capabilities, capability);    
+                cJSON_AddItemToObject(dev, "capabilities", capabilities);
+                cJSON_AddItemToArray(devs, dev);    
+            }
+            childOutput = childOutput->next;
+        }        
+        childDevice = childDevice->next;
+    }
+
+    cJSON_AddItemToObject(payload, "devices", devs);
+    cJSON_AddItemToObject(devAlice, "payload", payload); 
+
+    *response = cJSON_Print(devAlice);
+    cJSON_Delete(devAlice);
+    return ESP_OK;
+}
+
 // Получение данных устройства по slaveid
 // /device?slaveid=1 
 esp_err_t getDevice(char **response, uint8_t slaveId) {
@@ -546,8 +612,13 @@ esp_err_t setOutputs(char **response, unsigned char slaveId, char *content) {
     while (childData) {     
         if (!cJSON_IsString(cJSON_GetObjectItem(childData, "name")) || 
             (cJSON_GetObjectItem(childData, "name")->valuestring == NULL)) {
-            setErrorText(response, "Property name not set"); // TODO : which id
-            //setErrorText(response, sprintf("Property name  %d not set", 123)); // TODO : which id
+            setErrorText(response, "Property name not set"); // TODO : which id            
+            return ESP_FAIL;
+        }
+        if (!cJSON_IsTrue(cJSON_GetObjectItem(childData, "alice")) &&
+            (!cJSON_IsString(cJSON_GetObjectItem(childData, "room")) || 
+            (cJSON_GetObjectItem(childData, "room")->valuestring == NULL))) {
+            setErrorText(response, "Property room not set");            
             return ESP_FAIL;
         }
         if (!cJSON_IsNumber(cJSON_GetObjectItem(childData, "id"))) {
@@ -568,6 +639,7 @@ esp_err_t setOutputs(char **response, unsigned char slaveId, char *content) {
             // ESP_LOGI(TAG, "data %s", cJSON_Print(data));
             cJSON_ReplaceItemInObject(childDevice, "outputs", data);
             //*response = cJSON_Print(data);
+            saveDevices();
             return getOutputs(response, slaveId);                   
         }
         childDevice = childDevice->next;
@@ -719,6 +791,7 @@ esp_err_t setInputs(char **response, unsigned char slaveId, char *content) {
 
     //setText(response, "OK");
     //return ESP_OK;
+    saveDevices();
     return getInputs(response, slaveId);     
 }
 
@@ -761,7 +834,7 @@ esp_err_t getEvents(char **response, unsigned char slaveId, unsigned char inputI
                 ESP_LOGE(TAG, "No input %d for slaveid %d found", inputId, slaveId);
                 return ESP_FAIL;    
             } else {
-                *response = cJSON_Print(cJSON_CreateArray());
+                *response = cJSON_Print(cJSON_CreateArray());                
                 return ESP_OK;
             }
         }
@@ -835,6 +908,7 @@ esp_err_t setEvents(char **response, unsigned char slaveId, unsigned char inputI
                         cJSON_AddItemToObject(childInput, "events", cJSON_CreateArray());
                     }
                     cJSON_ReplaceItemInObject(childInput, "events", data);                  
+                    saveDevices();
                     return getEvents(response, slaveId, inputId);
                 }
                 childInput = childInput->next;
@@ -1090,6 +1164,156 @@ esp_err_t setOutput(char **response, uint8_t slaveId, uint8_t outputId, uint8_t 
         setCoilQueue(slaveId, outputId, action);
     }
     setText(response, "OK");
+    return ESP_OK;  
+}
+
+esp_err_t setActionAlice(char **response, char *content, char* requestId) { 
+    // выставить значение устройства алисы    
+    ESP_LOGI(TAG, "setActionAlice");     
+    uint8_t slaveId, outputId, action = 0;
+
+    cJSON *payload = cJSON_Parse(content);
+    if(!cJSON_IsObject(payload))
+    {
+        setErrorText(response, "No payload!");
+        return ESP_FAIL;
+    }
+    //ESP_LOGI(TAG, "payload %s", cJSON_Print(payload));
+    //ESP_LOGI(TAG, "isarray %d", cJSON_IsArray(cJSON_GetObjectItem(payload, "devices")));
+    // prepare answer
+    cJSON *devAlice = cJSON_CreateObject();
+    cJSON_AddItemToObject(devAlice, "request_id", cJSON_CreateString(requestId));
+
+    cJSON *payloadResponse = cJSON_CreateObject();
+    cJSON *devs = cJSON_CreateArray(); 
+    cJSON *dev = NULL;   
+    // cJSON *state = cJSON_CreateObject();
+    cJSON *status = NULL;
+
+    cJSON *childDevice = cJSON_GetObjectItem(cJSON_GetObjectItem(payload, "payload"), "devices")->child;            
+    while (childDevice) {
+        // get slaveid and output
+        slaveId = cJSON_GetObjectItem(cJSON_GetObjectItem(childDevice, "custom_data"), "slaveid")->valueint;
+        outputId = cJSON_GetObjectItem(cJSON_GetObjectItem(childDevice, "custom_data"), "output")->valueint;
+        action = 0;
+        cJSON *capabilities = cJSON_GetObjectItem(childDevice, "capabilities")->child;   
+        while (capabilities) {
+            if (!strcmp(cJSON_GetObjectItem(capabilities, "type")->valuestring, "devices.capabilities.on_off")) {
+                if (cJSON_IsTrue(cJSON_GetObjectItem(cJSON_GetObjectItem(capabilities, "state"), "value"))) {
+                    action = 1;
+                    break;
+                }
+            }
+            capabilities = capabilities->next;
+        }
+        setCoilQueue(slaveId, outputId, action);                
+
+        // cJSON_AddItemToObject(state, "instance", cJSON_CreateString("on"));
+        dev = cJSON_CreateObject();
+        cJSON_AddItemToObject(dev, "id", cJSON_CreateString(cJSON_GetObjectItem(childDevice, "id")->valuestring));
+        status = cJSON_CreateObject();
+        cJSON_AddItemToObject(status, "status", cJSON_CreateString("DONE")); // пока так, т.к. сразу ответ не придет, единственное можно проверить на наличие слейва и выхода в нем
+        cJSON_AddItemToObject(dev, "action_result", status);        
+        
+        // cJSON_AddItemToObject(dev, "type", cJSON_CreateString("devices.capabilities.on_off"));
+        // cJSON_AddItemToObject(dev, "state", state);
+        cJSON_AddItemToArray(devs, dev);
+        childDevice = childDevice->next;
+    }
+        
+    cJSON_AddItemToObject(payloadResponse, "devices", devs);
+    cJSON_AddItemToObject(devAlice, "payload", payloadResponse); 
+
+    *response = cJSON_Print(devAlice);
+    cJSON_Delete(payload);
+    cJSON_Delete(devAlice);        
+    return ESP_OK;  
+}
+
+uint8_t getOutputState(uint8_t slaveId, uint8_t outputId) {
+    // получить состояние выхода устройства
+    // TODO : переделать, добавить проверку если выход не найден - ошибку вернуть
+    uint8_t res = 0;
+    cJSON *childOutput = NULL;
+    cJSON *childDevice = devices->child;    
+    while (childDevice)
+    {       
+        if (cJSON_GetObjectItem(childDevice, "slaveid")->valueint == slaveId) {
+            if (cJSON_IsArray(cJSON_GetObjectItem(childDevice, "outputs"))) {                
+                childOutput = cJSON_GetObjectItem(childDevice, "outputs")->child;
+                while (childOutput) {
+                    if (cJSON_GetObjectItem(childOutput, "id")->valueint == outputId) {
+                        if (cJSON_IsNumber(cJSON_GetObjectItem(childOutput, "curVal"))) {
+                            res = cJSON_GetObjectItem(childOutput, "curVal")->valueint;
+                            break;
+                        }
+                    }
+                    childOutput = childOutput->next;
+                }                
+            }
+        }
+        childDevice = childDevice->next;
+    }
+    return res;
+}
+
+esp_err_t getQueryDevicesAlice(char **response, char *content, char* requestId) { 
+    // выставить значение устройства алисы    
+    ESP_LOGI(TAG, "getQueryDevicesAlice");     
+    uint8_t slaveId, outputId, value;
+
+    cJSON *payload = cJSON_Parse(content);
+    if(!cJSON_IsObject(payload))
+    {
+        setErrorText(response, "No payload!");
+        return ESP_FAIL;
+    }
+    
+    // prepare answer
+    cJSON *devAlice = cJSON_CreateObject();
+    cJSON_AddItemToObject(devAlice, "request_id", cJSON_CreateString(requestId));
+
+    cJSON *payloadResponse = cJSON_CreateObject();
+    cJSON *devs = cJSON_CreateArray(); 
+    cJSON *dev = NULL;       
+    cJSON *state = NULL;
+    cJSON *capability = NULL;
+    cJSON *capabilities = NULL;
+    if (!cJSON_IsArray(cJSON_GetObjectItem(payload, "devices"))) {
+        cJSON_Delete(payload);
+        return ESP_FAIL;
+    }
+    cJSON *childDevice = cJSON_GetObjectItem(payload, "devices")->child;            
+    while (childDevice) {
+        // get slaveid and output
+        slaveId = cJSON_GetObjectItem(cJSON_GetObjectItem(childDevice, "custom_data"), "slaveid")->valueint;
+        outputId = cJSON_GetObjectItem(cJSON_GetObjectItem(childDevice, "custom_data"), "output")->valueint;
+        value = getOutputState(slaveId, outputId);
+        state = cJSON_CreateObject();
+        cJSON_AddItemToObject(state, "instance", cJSON_CreateString("on"));
+        if (value)
+            cJSON_AddItemToObject(state, "value", cJSON_CreateTrue());
+        else
+            cJSON_AddItemToObject(state, "value", cJSON_CreateFalse());
+
+        dev = cJSON_CreateObject();
+        cJSON_AddItemToObject(dev, "id", cJSON_CreateString(cJSON_GetObjectItem(childDevice, "id")->valuestring));
+        capabilities = cJSON_CreateArray();
+        capability = cJSON_CreateObject();        
+        cJSON_AddItemToObject(capability, "type", cJSON_CreateString("devices.capabilities.on_off"));
+        cJSON_AddItemToObject(capability, "state", state);
+        cJSON_AddItemToArray(capabilities, capability);    
+        cJSON_AddItemToObject(dev, "capabilities", capabilities);
+        cJSON_AddItemToArray(devs, dev);
+        childDevice = childDevice->next;
+    }
+        
+    cJSON_AddItemToObject(payloadResponse, "devices", devs);
+    cJSON_AddItemToObject(devAlice, "payload", payloadResponse); 
+
+    *response = cJSON_Print(devAlice);
+    cJSON_Delete(payload);
+    cJSON_Delete(devAlice);        
     return ESP_OK;  
 }
 
@@ -1354,10 +1578,12 @@ esp_err_t uiRouter(httpd_req_t *req) {
     char *content = NULL;
     
     if ((!strcmp(uri, "/ui/devicesTree")) && (req->method == HTTP_GET)) {
+        httpd_resp_set_type(req, "application/json");
         err = getDevicesTree(&response);
     } else if (!strcmp(uri, "/ui/device")) {
         if ((toDecimal(getParamValue(req, "slaveid"), &slaveId) == ESP_OK) && (slaveId > 0)) {
             if (req->method == HTTP_GET) {
+                httpd_resp_set_type(req, "application/json");
                 err = getDevice(&response, slaveId);            
             } else if (req->method == HTTP_POST) {
                 err = getContent(&content, req);
@@ -1372,6 +1598,7 @@ esp_err_t uiRouter(httpd_req_t *req) {
     // вообще непонятно зачем device и devices. Вроде одного должно было хватить    
     } else if (!strcmp(uri, "/ui/devices")) {
         if (req->method == HTTP_GET) {
+            httpd_resp_set_type(req, "application/json");
             err = getDevices(&response);
         } else if (req->method == HTTP_POST) {
             err = getContent(&content, req);
@@ -1390,6 +1617,7 @@ esp_err_t uiRouter(httpd_req_t *req) {
     } else if (!strcmp(uri, "/ui/outputs")) {
         if ((toDecimal(getParamValue(req, "slaveid"), &slaveId) == ESP_OK) && (slaveId > 0)) {
             if (req->method == HTTP_GET) {
+                httpd_resp_set_type(req, "application/json");
                 err = getOutputs(&response, slaveId);                        
             } else if (req->method == HTTP_POST) {
                 err = getContent(&content, req);
@@ -1404,6 +1632,7 @@ esp_err_t uiRouter(httpd_req_t *req) {
     } else if (!strcmp(uri, "/ui/inputs")) {
         if ((toDecimal(getParamValue(req, "slaveid"), &slaveId) == ESP_OK) && (slaveId > 0)) {
             if (req->method == HTTP_GET) {
+                httpd_resp_set_type(req, "application/json");
                 err = getInputs(&response, slaveId);                        
             } else if (req->method == HTTP_POST) {
                 err = getContent(&content, req);
@@ -1419,6 +1648,7 @@ esp_err_t uiRouter(httpd_req_t *req) {
         if ((toDecimal(getParamValue(req, "slaveid"), &slaveId) == ESP_OK) && (slaveId > 0)) {
             if ((toDecimal(getParamValue(req, "inputid"), &inputId) == ESP_OK)) {
                 if (req->method == HTTP_GET) {
+                    httpd_resp_set_type(req, "application/json");
                     err = getEvents(&response, slaveId, inputId);
                 } else if (req->method == HTTP_POST) {
                     err = getContent(&content, req);
@@ -1436,17 +1666,20 @@ esp_err_t uiRouter(httpd_req_t *req) {
         }
     } else if ((!strcmp(uri, "/ui/setDeviceConfig")) && (req->method == HTTP_POST)) {
         if ((toDecimal(getParamValue(req, "slaveid"), &slaveId) == ESP_OK) && (slaveId > 0)) {
+            httpd_resp_set_type(req, "application/json");
             err = setDeviceConfig(&response, slaveId);                        
         } else {
             err = ESP_FAIL;
             setErrorText(&response, "No slaveid");            
         }        
     } else if ((!strcmp(uri, "/ui/status")) && (req->method == HTTP_GET)) {
+        httpd_resp_set_type(req, "application/json");
         err = getStatus(&response);
     } else if (!strcmp(uri, "/ui/output")) {
         if ((toDecimal(getParamValue(req, "slaveid"), &slaveId) == ESP_OK) && (slaveId > 0)) {
             if ((toDecimal(getParamValue(req, "output"), &outputId) == ESP_OK)) {
                 if (req->method == HTTP_GET) {
+                    httpd_resp_set_type(req, "application/json");
                     err = getOutput(&response, slaveId, outputId);
                 } else if (req->method == HTTP_POST) {
                     uint8_t action;
@@ -1468,10 +1701,12 @@ esp_err_t uiRouter(httpd_req_t *req) {
     } else if (!strcmp(uri, "/ui/switchOutput")) {
         err = getContent(&content, req);
         if (err == ESP_OK) {
+            httpd_resp_set_type(req, "application/json");
             err = switchOutput(&response, content);
         }
     } else if (!strcmp(uri, "/service/config/service")) {
         if (req->method == HTTP_GET) {
+            httpd_resp_set_type(req, "application/json");                
             err = getServiceConfig(&response);
         } else if (req->method == HTTP_POST) {
             err = getContent(&content, req);
@@ -1481,6 +1716,7 @@ esp_err_t uiRouter(httpd_req_t *req) {
         }        
     } else if (!strcmp(uri, "/service/config/network")) {
         if (req->method == HTTP_GET) {
+            httpd_resp_set_type(req, "application/json");
             err = getNetworkConfig(&response);
         } else if (req->method == HTTP_POST) {
             err = getContent(&content, req);
@@ -1514,19 +1750,78 @@ esp_err_t uiRouter(httpd_req_t *req) {
         startOTA();        
         setText(&response, "OK");
         err = ESP_OK;        
-    }  else if ((!strcmp(uri, "/ui/version")) && (req->method == HTTP_GET)) {        
+    } else if ((!strcmp(uri, "/ui/version")) && (req->method == HTTP_GET)) {        
         char *version = getCurrentVersion();
         setText(&response, version);
         free(version);
+        httpd_resp_set_type(req, "application/json");
+        err = ESP_OK;    
+    } else if (((!strcmp(uri, "/v1.0")) || (!strcmp(uri, "/v1.0/"))) && (req->method == HTTP_HEAD)) {
+        ESP_LOGI(TAG, "HEAD method");
+        httpd_resp_send(req, "online", -1);
         err = ESP_OK;
+    } else if ((!strcmp(uri, "/alice/v1.0/user/devices")) && (req->method == HTTP_GET)) {        
+        // get X-Request-Id from header
+        char* requestId; 
+        uint8_t buf_len = httpd_req_get_hdr_value_len(req, "X-Request-Id") + 1;
+        if (buf_len > 1) {
+            requestId = malloc(buf_len);
+            if (httpd_req_get_hdr_value_str(req, "X-Request-Id", requestId, buf_len) == ESP_OK) {
+                httpd_resp_set_type(req, "application/json");
+                err = getDevicesAlice(&response, requestId);        
+            }
+            free(requestId);
+        } else {
+            setErrorText(&response, "No X-Request-Id header!"); 
+            err = ESP_FAIL;
+        }        
+    } else if ((!strcmp(uri, "/alice/v1.0/user/devices/query")) && (req->method == HTTP_POST)) {        
+        // get X-Request-Id from header
+        char* requestId; 
+        uint8_t buf_len = httpd_req_get_hdr_value_len(req, "X-Request-Id") + 1;
+        if (buf_len > 1) {
+            requestId = malloc(buf_len);
+            if (httpd_req_get_hdr_value_str(req, "X-Request-Id", requestId, buf_len) == ESP_OK) {                
+                err = getContent(&content, req);
+                if (err == ESP_OK) {
+                    httpd_resp_set_type(req, "application/json");
+                    err = getQueryDevicesAlice(&response, content, requestId);        
+                }
+            }
+            free(requestId);
+        } else {
+            setErrorText(&response, "No X-Request-Id header!"); 
+            err = ESP_FAIL;
+        }            
+    } else if ((!strcmp(uri, "/alice/v1.0/user/devices/action")) && (req->method == HTTP_POST)) {        
+        //get X-Request-Id from header
+        char* requestId; 
+        uint8_t buf_len = httpd_req_get_hdr_value_len(req, "X-Request-Id") + 1;
+        if (buf_len > 1) {
+            requestId = malloc(buf_len);
+            if (httpd_req_get_hdr_value_str(req, "X-Request-Id", requestId, buf_len) == ESP_OK) {                
+                err = getContent(&content, req);
+                if (err == ESP_OK) {
+                    httpd_resp_set_type(req, "application/json");
+                    err = setActionAlice(&response, content, requestId);
+                }                
+            }
+            free(requestId);            
+        } else {
+            setErrorText(&response, "No X-Request-Id header!"); 
+            err = ESP_FAIL;
+        }               
+        
+    } else if (!strncmp(uri, "/alice/", 7)) {        
+        setText(&response, req->uri);
+        err = ESP_ERR_NOT_FOUND;        
     }
 
     
 
     // check result
     if (err == ESP_OK) {
-        httpd_resp_set_status(req, "200");
-        httpd_resp_set_type(req, "application/json");                
+        httpd_resp_set_status(req, "200");        
     } else if (err == ESP_ERR_NOT_FOUND) {
         httpd_resp_set_status(req, "404");        
         setErrorText(&response, "Method not found!");        
@@ -1722,13 +2017,7 @@ void addAction(action_t pAction) {
     act->slave_addr = pAction.slave_addr;
     act->output = pAction.output;
     act->action = pAction.action;    
-    actions[actions_qty++] = act;
-    
-    // colhoze
-    // action[actions_qty]->slave_addr = pAction.slave_addr;
-    // action[actions_qty]->output = pAction.output;
-    // action[actions_qty]->action = pAction.action;
-    // actions_qty++;
+    actions[actions_qty++] = act;        
 }
 
 void processActions() {
