@@ -1,0 +1,165 @@
+// RGB device
+
+DMX channels
+
+{
+    "model": "RGBWStrip",
+    "name": "подсветка",    
+    "room": "зал",
+    "id": "rgbw-1",
+    "address": {
+        "r": 1,
+        "g": 2,
+        "b": 3,
+        "w": 4
+    },
+    "values": {
+        "h": 100,
+        "s": 200,
+        "v": 30,
+        "w": 40    
+    }
+}
+
+// for PWM light controller
+{
+    "model": "PWM4",
+    "slaveid": 5,    
+    "values": {
+        "0": 1023,
+        "1": 200,
+        "2": 30,
+        "3": 0    
+    }
+}
+
+// dmx process
+
+
+{
+    "request_id": "ff36a3cc-ec34-11e6-b1a0-64510650abcf",
+    "payload": {
+        "devices": [
+            {
+                "id": "lamp-001-xdl",
+                "capabilities": [
+                    {
+                        "type": "devices.capabilities.color_setting",
+                        "retrievable": true,
+                        "parameters": {
+                            "color_model": "hsv",
+                            "temperature_k": {
+                                "max": 6500,
+                                "min": 2700
+                            }
+                        }
+                       
+                    },
+                    {
+                        "type": "devices.capabilities.range",
+                        "retrievable": true,
+                        "parameters": {
+                            "instance": "brightness",
+                            "random_access": true,
+                            "range": {
+                                "max": 100,
+                                "min": 0,
+                                "precision": 10
+                            },
+                            "unit": "unit.percent"
+                        }
+                    },
+                    {
+                        "type": "devices.capabilities.on_off",
+                        "state": {
+                            "instance": "on",
+                            "value": true
+                        }
+                    }
+                ]
+            }]
+
+
+/// query  answer
+
+{
+    "request_id": "ff36a3cc-ec34-11e6-b1a0-64510650abcf",
+    "payload": {
+        "devices": [
+            {
+                "id": "lamp-001-xdl",
+                "capabilities": [
+                    {
+                        "type": "devices.capabilities.color_setting",
+                        "state": {
+                            "instance": "hsv",
+                            "value": {
+                                "h": 255,
+                                "s": 100,
+                                "v": 50
+                            }
+                        }
+                    }
+                ]
+            },
+            {
+                "id": "lamp-003-xdl",
+                "capabilities": [
+                    {
+                        "type": "devices.capabilities.color_setting",
+                        "state": {
+                            "instance": "temperature_k",
+                            "value": 4500
+                        }
+                    }
+                ]
+            }
+        ]
+    }
+}
+
+
+// action answer
+
+{
+  "request_id": "ff36a3cc-ec34-11e6-b1a0-64510650abcf",
+  "payload": {
+    "devices": [{
+        "id": "lamp-001-xdl",
+        "capabilities": [{
+          "type": "devices.capabilities.color_setting",
+          "state": {
+            "instance": "hsv",
+            "action_result": {
+              "status": "DONE"
+            }
+          }
+        }]
+      },
+      {
+        "id": "lamp-003-xdl",
+        "capabilities": [{
+          "type": "devices.capabilities.color_setting",
+          "state": {
+            "instance": "temperature_k",
+            "action_result": {
+              "status": "DONE"
+            }
+          }
+        }]
+      }
+    ]
+  }
+}     
+
+// hz
+
+
+         "state": {
+                            "instance": "hsv",
+                            "value": {
+                                "h": 255,
+                                "s": 100,
+                                "v": 50
+                            }
+                        }

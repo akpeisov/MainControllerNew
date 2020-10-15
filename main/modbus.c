@@ -120,7 +120,7 @@ esp_err_t mbInit() {
     };
     
     // Set UART log level
-    ESP_LOGI(TAG, "Starting RS485");
+    ESP_LOGI(TAG, "Starting RS485 ModBus");
     // Install UART driver (we don't need an event queue here)
     // In this example we don't even use a buffer for sending data.
     ESP_ERROR_CHECK(uart_driver_install(uart_num, BUF_SIZE * 2, BUF_SIZE * 2, 0, NULL, 0));

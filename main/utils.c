@@ -61,3 +61,25 @@ uint8_t isIp_v4(char *ip)
     free(dup);
     return flag && (counter == 4);
 }
+
+void rtrim( char * string, char * trim )
+{
+     // делаем обрезку справа
+     int i;
+     for( i = strlen (string) - 1; 
+           i >= 0 && strchr (trim, string[i]) != NULL;
+           i-- )
+     {  
+         // переставляем терминатор строки 
+         string[i] = '\0';
+     }
+}
+ 
+void ltrim( char * string, char * trim )
+{
+     // делаем обрезку слева
+     while ( string[0] != '\0' && strchr ( trim, string[0] ) != NULL )
+     {
+         memmove( &string[0], &string[1], strlen(string) );
+     }
+}

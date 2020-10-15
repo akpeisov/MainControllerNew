@@ -2,6 +2,6 @@
 # in this exact order for cmake to work correctly
 cmake_minimum_required(VERSION 3.5)
 
-set(PROJECT_VER "1.1.0.38")
+set(PROJECT_VER "1.1.0.98")
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 project(MainControllerNew)

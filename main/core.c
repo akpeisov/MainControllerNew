@@ -15,6 +15,7 @@ static const char *TAG = "CORE";
 static cJSON *networkConfig;
 static cJSON *serviceConfig;
 static cJSON *devices;
+static cJSON *DMXdevices;
 
 //network config defaults
 #define DEF_IP          "192.168.99.9"
@@ -97,6 +98,32 @@ esp_err_t loadDevices() {
 esp_err_t saveDevices() {
     char * dev = cJSON_Print(devices);
     esp_err_t err = saveTextFile("/config/devices.json", dev);
+    free(dev);
+    return err;
+}
+
+esp_err_t loadDMXDevices() {
+    char * buffer;
+    bool ok = false;
+    if (loadTextFile("/config/DMXdevices.json", &buffer) == ESP_OK) {
+        cJSON *parent = cJSON_Parse(buffer);
+        if (cJSON_IsArray(parent)) {
+            DMXdevices = parent;            
+            ok = true;
+        }
+    }
+    if (!ok) {     
+        ESP_LOGI(TAG, "can't read DMXdevices config. creating null config");       
+        cJSON_Delete(DMXdevices);
+        DMXdevices = cJSON_CreateArray();        
+    }
+    free(buffer);
+    return ESP_OK;
+}
+
+esp_err_t saveDMXDevices() {
+    char * dev = cJSON_Print(DMXdevices);
+    esp_err_t err = saveTextFile("/config/DMXdevices.json", dev);
     free(dev);
     return err;
 }
@@ -208,7 +235,8 @@ esp_err_t loadServiceConfig() {
 esp_err_t loadConfig() {
     if ((loadNetworkConfig() == ESP_OK) && 
         (loadServiceConfig() == ESP_OK) && 
-        (loadDevices() == ESP_OK)) {
+        (loadDevices() == ESP_OK) &&
+        (loadDMXDevices() == ESP_OK)) {
         return ESP_OK;
     }    
     return ESP_FAIL;
@@ -554,6 +582,92 @@ esp_err_t delDevice(char **response, uint8_t slaveId) {
     setText(response, "Deleted");    
     return ESP_OK;
 }
+
+esp_err_t getDMXDevices(char **response) {
+    ESP_LOGI(TAG, "getDMXDevices");
+    if (!cJSON_IsArray(DMXdevices)) {      
+        //setErrorText(response, "DMXdevices is not a json array");
+        *response = cJSON_Print(cJSON_CreateArray());
+        return ESP_OK;
+    }
+    
+    *response = cJSON_Print(DMXdevices);
+    return ESP_OK;    
+}
+
+esp_err_t setDMXDevices(char **response, char *content) {        
+    // тупо обновит весь массив устройств
+    ESP_LOGI(TAG, "setDMXDevices");
+
+    //new data
+    cJSON *data = cJSON_Parse(content);
+    if(!cJSON_IsArray(data))
+    {
+        setErrorText(response, "Can't parse content. Not json array!");
+        return ESP_FAIL;
+    }
+    
+    // TODO : добавить валидацию payload
+    if (cJSON_IsObject(DMXdevices)) {
+        cJSON_Delete(DMXdevices);
+    }
+    DMXdevices = data;    
+    setText(response, "OK");
+    saveDMXDevices();
+    return ESP_OK;
+}
+
+/*
+esp_err_t setDMXDevice(char **response, char *content) {    
+    // add/edit DMXdevice
+    // обновит текущее устройство по айди или добавит новое если такого нет    
+    ESP_LOGI(TAG, "setDMXDevice");
+
+    if (!cJSON_IsArray(DMXdevices)) {
+        setErrorText(response, "DMXdevices is not a json");
+        return ESP_FAIL;        
+    }
+
+    //new data
+    cJSON *data = cJSON_Parse(content);
+    if(!cJSON_IsObject(data))
+    {
+        setErrorText(response, "Can't parse content");
+        return ESP_FAIL;
+    }
+    
+    char *Id;
+    if (!cJSON_IsString(cJSON_GetObjectItem(data, "id"))) {
+        setErrorText(response, "No Id");
+        return ESP_FAIL;
+    } else {
+        Id = cJSON_GetObjectItem(data, "id")->valuestring;
+    }
+    
+    // TODO : добавить валидацию payload
+    // ищем существующий айди в массиве и удаляем его если найдем, далее просто добавляем все, что есть
+    uint8_t idx = 0;
+    // bool found = false;
+    cJSON *childDevice = DMXdevices->child;        
+    while (childDevice) {
+        if (!strcmp(cJSON_GetObjectItem(childDevice, "slaveid")->valuestring, Id)) {
+            ESP_LOGI(TAG, "Deleting existing device");
+            cJSON_DeleteItemFromArray(DMXdevices, idx);            
+            // found = true;
+            break;
+        }        
+        childDevice = childDevice->next;        
+        idx++;
+    }
+
+    // set new DMX device        
+    ESP_LOGI(TAG, "Adding new device");
+    cJSON_AddItemToArray(devices, data);            
+    setText(response, "OK");
+    saveDMXDevices();
+    return ESP_OK;
+}
+*/
 
 // Получение списка выходов со статусом
 // /outputs?slaveid=2
@@ -1815,9 +1929,19 @@ esp_err_t uiRouter(httpd_req_t *req) {
     } else if (!strncmp(uri, "/alice/", 7)) {        
         setText(&response, req->uri);
         err = ESP_ERR_NOT_FOUND;        
-    }
+    } else if (!strcmp(uri, "/ui/DMXdevices")) {
+        if (req->method == HTTP_GET) {
+            httpd_resp_set_type(req, "application/json");
+            err = getDMXDevices(&response);
+        } else if (req->method == HTTP_POST) {
+            err = getContent(&content, req);
+            if (err == ESP_OK) {
+                err = setDMXDevices(&response, content);    
+            }            
+        }
+    }  
 
-    
+
 
     // check result
     if (err == ESP_OK) {

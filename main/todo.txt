@@ -1,0 +1,7 @@
+// todo.txt
+
+1. RGB лента via DMX
+2. Polling mode для овена
+3. OpenHab connect (MQTT/ModBus TCP)
+4. RGB контроллер
++5. FTP

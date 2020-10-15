@@ -12,6 +12,7 @@
 #include "network.h"
 #include "webServer.h"
 #include "modbus.h"
+#include "ftp.h"
 
 static const char *TAG = "MAIN";
 
@@ -89,4 +90,6 @@ void app_main(void)
 
     changeLEDStatus(LED_NORMAL);
     writeLog("I", "System started");
+
+    initFTP();
 }
