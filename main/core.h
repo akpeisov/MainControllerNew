@@ -21,5 +21,6 @@ esp_err_t uiRouter(httpd_req_t *req);
 bool isReboot();
 void pollingNew();
 
+void processDMXDevices();
 SemaphoreHandle_t getSemaphore();
 void createSemaphore();

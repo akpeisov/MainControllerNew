@@ -1,0 +1,61 @@
+<html>
+<head>
+	<title></title>
+	<link href="css/main.css" rel="stylesheet" type="text/css">	
+	<link href="https://unpkg.com/tabulator-tables@4.5.3/dist/css/tabulator.min.css" rel="stylesheet">
+</head>
+
+	<body>
+	<div id="shadow-one"><div id="shadow-two"><div id="shadow-three"><div id="shadow-four">
+	<div id="page">
+	<div id="title">
+    	<a href="http://home.akpeisov.kz" target="_blank"> <img width="80" src="logo.png" alt="Ipses" style="border:0px; float:left"> </a>
+        <div class="right">HOME-IO Control Panel</div>
+    </div>
+    
+	<div id="tableDiv"></div>	
+        <button class="ui-button ui-widget ui-corner-all" id="bSave">Save</button>
+	    
+ 	<script src="https://code.jquery.com/jquery-3.4.1.min.js"></script>
+ 	<script type="text/javascript" src="https://unpkg.com/tabulator-tables@4.5.3/dist/js/tabulator.min.js"></script>
+	<script type="text/javascript">
+            var inputsData = [{
+		"id":	0,
+		"name":	"",
+		"room":	"",
+		"curVal":	0
+	}];
+            var table = new Tabulator("#tableDiv", {
+            layout:"fitColumns", // fitDataFill, fitData
+            resizableColumns:true,
+            data:inputsData,
+            //ajaxURL:"/ui/outputs?slaveid="+slaveid,
+            responsiveLayout:"collapse",
+            selectable: true,
+            columns:[
+                //{formatter:"responsiveCollapse", width:30, minWidth:30, align:"center", resizable:false, headerSort:false},    
+
+                {title:"ID", field:"id", sorter:"number", editor:"number", editorParams:{"min":0, "max":65535}, validator:["min:0", "max:65535", "numeric"]},
+                {title:"Name", field:"name",editor:true,validator:"required"},                        
+                {title:"Room", field:"room",editor:true,validator:"required"},                        
+                {title:"Alice", field:"alice",editor:true,formatter:"tick"},
+                {title:"Status", field:"curVal"},        
+                //{title:"Delete", formatter:"buttonCross", cellClick:function(e, cell){if(confirm('Are you sure you want to delete this entry?')) cell.getRow().delete();}},
+                ],
+            rowClick:function(e, row){
+                //alert("Row " + row.getIndex() + " Clicked!!!!")    
+            }
+            });
+        $("#bSave").click(function() {
+          var a = table.getData();
+          console.log(a);
+        });
+	</script>
+
+<div class="spacer">&nbsp;</div>
+<br></div>
+
+</div></div></div></div>
+
+</body>
+</html>

@@ -2,18 +2,68 @@
 #include "driver/uart.h"
 #include "esp_err.h"
 #include "dmx.h"
+#include "core.h"
+#include <string.h>
+#include "esp_log.h"
 
-#define MB_PORT_NUM          1
-#define BUF_SIZE            (127)
+#define DMX_PORT_NUM          1
+#define BUF_SIZE            513
 #define CONFIG_DMX_UART_TXD 32
 #define CONFIG_DMX_UART_RXD 35
 #define CONFIG_DMX_UART_RTS 33
 #define DMX_PACKET_LEN      512
+
+#define max(a, b)    (((a) > (b)) ? (a) : (b))
+#define min(a, b)    (((a) < (b)) ? (a) : (b))
+
 uint8_t *dmxData;
+static const char *TAG = "DMX";
+
+esp_err_t DMXSend() {    
+    // gen BREAK and send packet
+    //uart_write_bytes_with_break(uart_num, data, len); // break AFTER send :(
+    /*
+#define BREAKSPEED     83333
+#define BREAKFORMAT    SERIAL_8N1
+//Send break
+  digitalWrite(sendPin, HIGH);
+  Serial1.begin(BREAKSPEED, BREAKFORMAT);
+  Serial1.write(0);
+  Serial1.flush();
+  delay(1);
+  Serial1.end();
+    */    
+    //uart_write_bytes_with_break(DMX_PORT_NUM, "0", 1, 100);
+    uart_set_baudrate(DMX_PORT_NUM, 90909);
+    uart_write_bytes(DMX_PORT_NUM, "\0", 1);
+    for (int i=0;i<2500;i++) {
+        continue;
+    }
+    uart_set_baudrate(DMX_PORT_NUM, 250000);
+    if (uart_write_bytes(DMX_PORT_NUM, (char*)dmxData, DMX_PACKET_LEN) != DMX_PACKET_LEN) {
+        ESP_LOGE(TAG, "Can't write DMX data");
+        return ESP_FAIL;
+    }
+    return ESP_OK;
+}
+
+static void dmx_task(void *pvParameters)
+{
+    SemaphoreHandle_t sem = getSemaphore();    
+    while (1) {
+        if (xSemaphoreTake(sem, portMAX_DELAY) == pdTRUE) {
+            processDMXDevices();
+            DMXSend();    
+            xSemaphoreGive(sem);
+        }
+        vTaskDelay(100 / portTICK_RATE_MS);
+    }
+    vTaskDelete(NULL);
+}
 
 void DMXInit() {
     // init UART    
-    const int uart_num = MB_PORT_NUM; // 2 for modbus
+    const int uart_num = DMX_PORT_NUM; // 2 for modbus
     uart_config_t uart_config = {
         .baud_rate = 250000,
         .data_bits = UART_DATA_8_BITS,
@@ -28,7 +78,7 @@ void DMXInit() {
     ESP_LOGI(TAG, "Starting RS485 DMX");
     // Install UART driver (we don't need an event queue here)
     // In this example we don't even use a buffer for sending data.
-    ESP_ERROR_CHECK(uart_driver_install(uart_num, BUF_SIZE * 2, BUF_SIZE * 2, 0, NULL, 0));
+    ESP_ERROR_CHECK(uart_driver_install(uart_num, BUF_SIZE, BUF_SIZE, 0, NULL, 0));
     // Configure UART parameters
     ESP_ERROR_CHECK(uart_param_config(uart_num, &uart_config));
     ESP_LOGI(TAG, "UART set pins, mode and install driver.");
@@ -39,64 +89,12 @@ void DMXInit() {
     // Set read timeout of UART TOUT feature
     //ESP_ERROR_CHECK(uart_set_rx_timeout(uart_num, ECHO_READ_TOUT));
     dmxData = malloc(DMX_PACKET_LEN);
+    bzero(dmxData, DMX_PACKET_LEN);
+
+    xTaskCreate(dmx_task, "DMX", 4096, NULL, 5, NULL);
 }
 
-esp_err_t DMXSend() {
-    // gen BREAK and send packet
-    //uart_write_bytes_with_break(uart_num, data, len); // break AFTER send :(
-    /*
-#define BREAKSPEED     83333
-#define BREAKFORMAT    SERIAL_8N1
-//Send break
-  digitalWrite(sendPin, HIGH);
-  Serial1.begin(BREAKSPEED, BREAKFORMAT);
-  Serial1.write(0);
-  Serial1.flush();
-  delay(1);
-  Serial1.end();
-    */
-    uart_write_bytes_with_break(uart_num, "0", 1);
-    if (uart_write_bytes(MB_PORT_NUM, (char*)dmxData, DMX_PACKET_LEN) != DMX_PACKET_LEN) {
-        return ESP_FAIL;
-    }
-    return ESP_OK;
-}
-
-RGB_t HSVtoRGB(HSV_t hsv) {
-    uint16_t H = hsv.h;
-    uint8_t S = hsv.s;
-    uint8_t V = hsv.v;
-    float s = S/100.0;
-    float v = V/100.0;
-    float C = s*v;
-    float X = C*(1-abs(fmod(H/60.0, 2)-1));
-    float m = v-C;
-    uint8_t r,g,b;
-    if(H >= 0 && H < 60){
-        r = C,g = X,b = 0;
-    }
-    else if(H >= 60 && H < 120){
-        r = X,g = C,b = 0;
-    }
-    else if(H >= 120 && H < 180){
-        r = 0,g = C,b = X;
-    }
-    else if(H >= 180 && H < 240){
-        r = 0,g = X,b = C;
-    }
-    else if(H >= 240 && H < 300){
-        r = X,g = 0,b = C;
-    }
-    else{
-        r = C,g = 0,b = X;
-    }
-    r = (r+m)*255.0;
-    g = (g+m)*255.0;
-    b = (b+m)*255.0;
-    return RGB_t(r,g,b);
-}
-
-void hsv2rgb(uint32_t h, uint32_t s, uint32_t v, uint32_t *r, uint32_t *g, uint32_t *b) {
+void hsv2rgb(uint16_t h, uint8_t s, uint8_t v, uint8_t *r, uint8_t *g, uint8_t *b) {
     h %= 360; // h -> [0,360]
     uint32_t rgb_max = v * 2.55f;
     uint32_t rgb_min = rgb_max * (100 - s) / 100.0f;
@@ -141,15 +139,38 @@ void hsv2rgb(uint32_t h, uint32_t s, uint32_t v, uint32_t *r, uint32_t *g, uint3
     }
 }
 
+void rgb2hsv(uint8_t rr, uint8_t gg, uint8_t bb, uint16_t *h, uint8_t *s, uint8_t *v) {
+    float vMax;
+    float vMin;
+    float r = rr / 255.0;
+    float g = gg / 255.0;
+    float b = bb / 255.0;
+    vMax = max(max(r,g),b);
+    vMin = min(min(r,g),b);
+    if ((vMax == r) && (g >= b)) {
+        *h = 60*((g-b)/(vMax-vMin));
+    } else if ((vMax == r) && (g < b)) {
+        *h = 60*((g-b)/(vMax-vMin))+360;
+    } else if (vMax == g) {
+        *h = 60*((b-r)/(vMax-vMin))+120;
+    } else if (vMax == b) {
+        *h = 60*((r-g)/(vMax-vMin))+240;
+    }
+    if (vMax == 0)
+        *s = 0;
+    else
+        *s = (1-vMin/vMax)*100;
+    *v = vMax*100;
+}
 
 void setDMXData(uint8_t address, uint8_t value) {
     dmxData[address] = value;    
 }
 
-void DMXProcess() {
-    // таск для DMX
-    // будет выпуливать весь доступный стек (только до последнего объявленного адреса) постоянно.
-    // Надо использовать мютекс для доступа к данным?
-    // формирование сообщения
-    DMXSend();    
-}
+// void DMXProcess() {
+//     // таск для DMX
+//     // будет выпуливать весь доступный стек (только до последнего объявленного адреса) постоянно.
+//     // Надо использовать мютекс для доступа к данным?
+//     // формирование сообщения
+//     DMXSend();    
+// }

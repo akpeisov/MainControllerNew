@@ -92,18 +92,20 @@ uint16_t getLastId() {
     return id;    
 }
 
-void initStorage() {
+esp_err_t initStorage() {
 	initNVS();
 	#ifdef USE_SD
 	if (initSD(MOUNT_POINT) != ESP_OK) {
 		ESP_LOGE(TAG, "Can't init SD");
 		if (initSPIFFS(MOUNT_POINT) != ESP_OK) {
 			ESP_LOGE(TAG, "Can't init SPIFFS");
+            return ESP_FAIL;
 		}		
 	}	
 	#else
 	if (initSPIFFS(MOUNT_POINT) != ESP_OK) {
-			ESP_LOGE(TAG, "Can't init SPIFFS");
+		ESP_LOGE(TAG, "Can't init SPIFFS");
+        return ESP_FAIL;
 	}		
 	#endif
         
@@ -116,6 +118,7 @@ void initStorage() {
     strcat(logPath, buf);
     strcat(logPath, ".txt");    
     free(buf);
+    return ESP_OK;
 }
 
 esp_err_t loadTextFile(char * filename, char ** buffer) {    
@@ -439,6 +442,18 @@ esp_err_t writeLog(char* type, char* buffer) {
     return ESP_OK;
 }
 
+esp_err_t makeDirectory(const char *dirpath) {
+    char path[PATH_SIZE];
+    bzero(path, PATH_SIZE);
+    strcpy(path, MOUNT_POINT);    
+    strcat(path, dirpath);
+    int mk_ret = mkdir(path, 0775);    
+    ESP_LOGI(TAG, "Creating directory %s", path);
+    if (mk_ret != 0)
+        return ESP_FAIL;
+    return ESP_OK;
+}
+
 esp_err_t listDirectory(int socket, const char *dirpath) {    
     // (c) colhoze zarya-vostok
     ESP_LOGI(TAG, "Dir list path is %s", dirpath);    
@@ -450,9 +465,14 @@ esp_err_t listDirectory(int socket, const char *dirpath) {
     char entrypath[255];
     char entrysize[16];
     const char *entrytype;
+    char entryname[128];
     struct stat entry_stat;
     struct dirent *entry;
     char str[255];
+
+    char *lastdirs[10];
+    uint8_t lastdirsQty = 0;
+    // 
     
     size_t dirpath_len = strlen(path);
     DIR *dir = opendir(path);
@@ -468,26 +488,49 @@ esp_err_t listDirectory(int socket, const char *dirpath) {
     }
     strlcpy(entrypath, path, sizeof(entrypath));
     // ESP_LOGI(TAG, "entrypath %s", entrypath);
-
+    
     /* Iterate over all files / folders and fetch their names and sizes */
     while ((entry = readdir(dir)) != NULL) {
-        //stat(entrypath, &entry_stat);
-        entrytype = (entry->d_type == DT_DIR ? "d" : "-");        
-
-        strlcpy(entrypath + dirpath_len, entry->d_name, sizeof(entrypath) - dirpath_len);
-
-        // ESP_LOGI(TAG, "entrypath2 %s", entrypath);
-        if (stat(entrypath, &entry_stat) == -1) {
-            ESP_LOGE(TAG, "Failed to stat %s. Fullpath %s", entry->d_name, entrypath);
-            continue;
+        //stat(entrypath, &entry_stat);         
+        if (strstr(entry->d_name, "/")) {
+            entrytype = "d";
+            strlcpy(entryname, entry->d_name, strchr(entry->d_name, '/')-entry->d_name+1);
+            sprintf(entrysize, "%d", 0);            
+            // file contains / (for spiffs it's normal)
+            // TODO : check if it directory already printed skip it
+            bool exist = false;
+            for (uint8_t i=0; i<lastdirsQty; i++) {
+                // ESP_LOGW(TAG, "lastdirs %s", lastdirs[i]);
+                if (!strcmp(lastdirs[i], entryname)) {
+                    // already exists
+                    exist = true;
+                    break;
+                }
+            } 
+            if (!exist) {                                
+                lastdirs[lastdirsQty] = malloc(strlen(entryname)+1);
+                //strcpy(lastdirs[lastdirsQty++], entry->d_name); 
+                strcpy(lastdirs[lastdirsQty++], entryname); 
+            } else {
+                continue;
+            }
+        } else { 
+            entrytype = (entry->d_type == DT_DIR ? "d" : "-");        
+            strlcpy(entrypath + dirpath_len, entry->d_name, sizeof(entrypath) - dirpath_len);
+            if (stat(entrypath, &entry_stat) == -1) {
+                ESP_LOGE(TAG, "Failed to stat %s. Fullpath %s", entry->d_name, entrypath);
+                continue;
+            }
+            sprintf(entrysize, "%8ld", entry_stat.st_size);
+            strcpy(entryname, entry->d_name);
         }
-        
+
         strcpy(str, entrytype);
         strcat(str, "rw-rw-rw-   1 root     root     ");
-        sprintf(entrysize, "%8ld", entry_stat.st_size);
+        
         strcat(str, entrysize);
         strcat(str, " Jan 01 12:00 ");
-        strcat(str, entry->d_name);
+        strcat(str, entryname);
         strcat(str, "\n");
         // sprintf(str, "%srw-rw-rw-   1 root     root     %8ld Aug 25 12:25 %s",
         //         entrytype, entry_stat.st_size, entry->d_name);
@@ -497,6 +540,9 @@ esp_err_t listDirectory(int socket, const char *dirpath) {
         //drwxrwx---   1 root     root         2048 Jan  1 06:00 skins
     }
     closedir(dir);
+    for (uint8_t i=0; i<lastdirsQty; i++) {
+        free(lastdirs[i]);
+    }
     return ESP_OK;
 }
 
@@ -559,8 +605,7 @@ esp_err_t setFile(int socket, const char *filepath) {
         return ESP_FAIL;
     }
 
-    uint16_t len;
-    
+    uint16_t len;    
     do {
         len = recv(socket, buffer, BUF_SIZE, 0);
         if (len > 0)
@@ -587,6 +632,18 @@ esp_err_t deleteFile(const char *filepath) {
         return ESP_OK;
     return ESP_FAIL;
 }
+
+esp_err_t removeDirectory(const char *filepath) {    
+    char path[PATH_SIZE];
+    bzero(path, PATH_SIZE);
+    strcpy(path, MOUNT_POINT);    
+    strcat(path, filepath);    
+    ESP_LOGI(TAG, "Removing directory %s", path);
+    if (rmdir(path) == 0)
+        return ESP_OK;
+    return ESP_FAIL;
+}
+
 
 esp_err_t isDirExist(const char *dirpath) {
     // change directory for ftp

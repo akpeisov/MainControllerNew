@@ -18,6 +18,7 @@
 
 #include "storage.h"
 #include "utils.h"
+#include "network.h"
 
 #define PORT 21
 
@@ -27,8 +28,7 @@ static char curdir[128] = "/";
 static xQueueHandle xDataQueue = NULL;
 static xQueueHandle xDataQueue2 = NULL;
 
-static void ftpPasvSocket(void *pvParameters)
-{
+static void ftpPasvSocket(void *pvParameters) {
     char addr_str[128];
     int port = (int)pvParameters;
     int addr_family = (int)pvParameters;
@@ -157,7 +157,7 @@ static void do_retransmit(const int sock)
             ESP_LOGW(TAG, "Connection closed");
         } else {
             strcpy(answer, "500 command not recognized");
-            //ESP_LOG_BUFFER_HEXDUMP("rx_buffer", rx_buffer, len, CONFIG_LOG_DEFAULT_LEVEL);
+            ESP_LOG_BUFFER_HEXDUMP("rx_buffer", rx_buffer, len, CONFIG_LOG_DEFAULT_LEVEL);
             rx_buffer[len] = 0; // Null-terminate whatever is received and treat it like a string
             
             if (rx_buffer[len-1] == '\n')
@@ -172,6 +172,9 @@ static void do_retransmit(const int sock)
             args = strstr(rx_buffer, " ")+1;
             rtrim(args, " ");
             cmd = strtok(rx_buffer, " ");
+            if (cmd == NULL) {
+                cmd = "EMPTY";
+            }
             bzero(tmpbuf, sizeof(tmpbuf));
             //ESP_LOGI(TAG, "args !%s!", args);
 
@@ -200,11 +203,17 @@ static void do_retransmit(const int sock)
                 } else {
                     strcpy(answer, "200 Type set to A");
                 }
-            } else if (strstr(cmd, "PASV")) {
-                strcpy(answer, "227 Entering Passive Mode (192,168,99,48,100,5)"); // upper 8 bits, lower 8 bits, so 100*256+5 = 25605
+            } else if (strstr(cmd, "PASV")) { // enter passive mode
+                //ESP_LOGI(TAG, "address %lu", getOwnAddr());
+                sprintf(answer, "227 Entering Passive Mode (%d,%d,%d,%d,100,5)", 
+                        (getOwnAddr())&0xFF, 
+                        (getOwnAddr()>>8)&0xFF, 
+                        (getOwnAddr()>>16)&0xFF, 
+                        (getOwnAddr()>>24)&0xFF);
+                //strcpy(answer, "227 Entering Passive Mode (192,168,99,48,100,5)"); // upper 8 bits, lower 8 bits, so 100*256+5 = 25605
                 xTaskCreate(ftpPasvSocket, "ftp_pasv_server", 4096, (void*)25605, 5, NULL);
                 connOk = true;
-            } else if (strstr(cmd, "LIST")) {
+            } else if (strstr(cmd, "LIST")) { // ls
                 if (!connOk) { // if connection exists
                     strcpy(answer, "425 Can't build data connection");                    
                 } else {
@@ -222,11 +231,11 @@ static void do_retransmit(const int sock)
                     }
                     connOk = false;
                 }
-            } else if (strstr(cmd, "PWD")) {
+            } else if (strstr(cmd, "PWD")) { // print work dir
                 strcpy(answer, "257 \"");
                 strcat(answer, curdir);
                 strcat(answer, "\"");
-            } else if (strstr(cmd, "CWD")) {                
+            } else if (strstr(cmd, "CWD")) {  // change work dir               
                 if (!strcmp(args, "..")) {
                     // get parent dir
                     if (!strcmp(curdir, "/")) {
@@ -278,7 +287,7 @@ static void do_retransmit(const int sock)
                 } else {
                     strcpy(answer, "501 Can't change directory");
                 }
-            } else if (strstr(cmd, "RETR")) {
+            } else if (strstr(cmd, "RETR")) { // receive file
                 if (!connOk) {
                     strcpy(answer, "425 Can't build data connection");                    
                 } else {
@@ -295,7 +304,7 @@ static void do_retransmit(const int sock)
                     }
                     connOk = false;
                 }
-            } else if (strstr(cmd, "STOR")) {
+            } else if (strstr(cmd, "STOR")) { // store file
                 if (!connOk) {
                     strcpy(answer, "425 Can't build data connection");                    
                 } else {
@@ -312,21 +321,34 @@ static void do_retransmit(const int sock)
                     }
                     connOk = false;
                 }
-            } else if (strstr(cmd, "DELE")) {
+            } else if (strstr(cmd, "DELE")) { // delete file
                 if (deleteFile(args) == ESP_OK) {
                     strcpy(answer, "250 File deleted");
                 } else {
                     strcpy(answer, "450 Can't delete file");
                 }                
-            } else if (strstr(cmd, "RMD")) {
-                if (deleteFile(args) == ESP_OK) {
+            } else if (strstr(cmd, "RMD")) { // remove directory
+                strcpy(tmpbuf, curdir);
+                if (tmpbuf[strlen(tmpbuf)-1] != '/') {
+                    strcat(tmpbuf, "/");
+                }
+                strcat(tmpbuf, args);
+                if (removeDirectory(tmpbuf) == ESP_OK) {
                     strcpy(answer, "250 Directory deleted");
                 } else {
                     strcpy(answer, "450 Can't delete directory");
                 }                
-            } else if (strstr(cmd, "MKD")) {
+            } else if (strstr(cmd, "MKD")) { // make directory
                 // SPIFFS make directory not supported 
-                strcpy(answer, "257 Directory created");                
+                strcpy(answer, "257 Directory created");
+                // TODO : make directory for SD mode, or create special file for SPIFFS FTP
+                //tmpbuf curdir
+                strcpy(tmpbuf, curdir);
+                if (tmpbuf[strlen(tmpbuf)-1] != '/') {
+                    strcat(tmpbuf, "/");
+                }
+                strcat(tmpbuf, args);
+                makeDirectory(tmpbuf);
             }
 
             ESP_LOGI(TAG, "> %s", answer);

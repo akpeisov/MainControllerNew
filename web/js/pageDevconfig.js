@@ -4,7 +4,8 @@ var newDeviceRow = {
         "description": "",
         "status": "offline",
         "polling": false,
-        "autotimeout": 4000
+        "autotimeout": 4000,
+        "pollingmode": 0
       };
 var newInputRow = {
         "id": 0,
@@ -17,7 +18,8 @@ var newOutputRow = {
         "id": 0,        
         "name": "",
         "room": "",
-        "curVal": 0                       
+        "curVal": 0,
+        "alice": false
       };      
 var newEventRow = {
         "event": "off",        
@@ -314,7 +316,7 @@ function outputsTable(slaveid) {
     columns:[
         //{formatter:"responsiveCollapse", width:30, minWidth:30, align:"center", resizable:false, headerSort:false},    
 
-        {title:"ID", field:"id",editor:true,validator:"required"},
+        {title:"ID", field:"id",sorter:"number", editor:"number", editorParams:{"min":0, "max":65535}, validator:["min:0", "max:65535", "numeric"]},
         {title:"Name", field:"name",editor:true,validator:"required"},                        
         {title:"Room", field:"room",editor:true,validator:"required"},                        
         {title:"Alice", field:"alice",editor:true,formatter:"tick"},
@@ -395,7 +397,7 @@ function inputsTable(slaveid) {
     columns:[
         //{formatter:"responsiveCollapse", width:30, minWidth:30, align:"center", resizable:false, headerSort:false},    
 
-        {title:"ID", field:"id"},        
+        {title:"ID", field:"id",sorter:"number", editor:"number", editorParams:{"min":0, "max":65535}, validator:["min:0", "max:65535", "numeric"]},
         {title:"Name", field:"name",editor:true,validator:"required"},                
         {title:"isButton", field:"isButton",editor:true,formatter:"tick"},                
         {title:"Status", field:"curVal"},

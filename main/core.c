@@ -10,12 +10,14 @@
 #include "ota.h"
 #include "core.h"
 #include "driver/gpio.h"
+#include "dmx.h"
 
 static const char *TAG = "CORE";
 static cJSON *networkConfig;
 static cJSON *serviceConfig;
 static cJSON *devices;
 static cJSON *DMXdevices;
+static cJSON *temperaturesData;
 
 //network config defaults
 #define DEF_IP          "192.168.99.9"
@@ -76,22 +78,25 @@ uint8_t pollingList[MAX_DEVICES];
 static action_t* actions[MAX_ACTIONS];
 
 esp_err_t loadDevices() {
-    char * buffer;
+    char * buffer = NULL;
     if (loadTextFile("/config/devices.json", &buffer) == ESP_OK) {
         cJSON *parent = cJSON_Parse(buffer);
-        if(!cJSON_IsObject(parent) && !cJSON_IsArray(parent))
-        {
-            free(buffer);
-            return ESP_FAIL;
+        if (cJSON_IsArray(parent)) {            
+            cJSON_Delete(devices);
+            devices = parent;                    
+        } else {
+            ESP_LOGI(TAG, "devices is not a json, creating empty array");       
+            devices = cJSON_CreateArray();
         }
-        cJSON_Delete(devices);
-        devices = parent;        
     } else {
-        ESP_LOGI(TAG, "can't read devices config. creating null config");       
+        ESP_LOGI(TAG, "can't read devices config. creating empty array");
         cJSON_Delete(devices);
         devices = cJSON_CreateArray();        
     }
-    free(buffer);
+    if (buffer != NULL)
+        free(buffer);
+
+    //ESP_LOGI(TAG, "config %s", cJSON_Print(devices));
     return ESP_OK;
 }
 
@@ -103,7 +108,7 @@ esp_err_t saveDevices() {
 }
 
 esp_err_t loadDMXDevices() {
-    char * buffer;
+    char * buffer = NULL;
     bool ok = false;
     if (loadTextFile("/config/DMXdevices.json", &buffer) == ESP_OK) {
         cJSON *parent = cJSON_Parse(buffer);
@@ -117,13 +122,41 @@ esp_err_t loadDMXDevices() {
         cJSON_Delete(DMXdevices);
         DMXdevices = cJSON_CreateArray();        
     }
-    free(buffer);
+    if (buffer != NULL)
+        free(buffer);
     return ESP_OK;
 }
 
 esp_err_t saveDMXDevices() {
     char * dev = cJSON_Print(DMXdevices);
     esp_err_t err = saveTextFile("/config/DMXdevices.json", dev);
+    free(dev);
+    return err;
+}
+
+esp_err_t loadTemperatures() {
+    char * buffer = NULL;
+    bool ok = false;
+    if (loadTextFile("/config/temperatures.json", &buffer) == ESP_OK) {
+        cJSON *parent = cJSON_Parse(buffer);
+        if (cJSON_IsArray(parent)) {
+            temperaturesData = parent;
+            ok = true;
+        }
+    }
+    if (!ok) {
+        ESP_LOGI(TAG, "can't read temperaturesData config. creating null config");       
+        cJSON_Delete(temperaturesData);
+        temperaturesData = cJSON_CreateArray();        
+    }
+    if (buffer != NULL)
+        free(buffer);
+    return ESP_OK;
+}
+
+esp_err_t saveTemperatures() {
+    char * dev = cJSON_Print(temperaturesData);
+    esp_err_t err = saveTextFile("/config/temperatures.json", dev);
     free(dev);
     return err;
 }
@@ -148,6 +181,8 @@ esp_err_t createNetworkConfig() {
     cJSON_AddItemToObject(networkConfig, "ntpserver", cJSON_CreateString("pool.ntp.org"));
     cJSON_AddItemToObject(networkConfig, "ntpTZ", cJSON_CreateString("Asia/Almaty"));
     cJSON_AddItemToObject(networkConfig, "configured", cJSON_CreateFalse());
+    cJSON_AddItemToObject(networkConfig, "otaurl", cJSON_CreateString("https://192.168.99.6:8443/MainControllerNew.bin"));
+    
     return ESP_OK;
 }
 
@@ -220,13 +255,13 @@ esp_err_t loadServiceConfig() {
         }
         cJSON_Delete(serviceConfig);
         serviceConfig = parent;        
+        free(buffer);
     } else {
         ESP_LOGI(TAG, "can't read serviceconfig. creating default config");
         cJSON_Delete(serviceConfig);
         if (createServiceConfig() == ESP_OK)
             saveServiceConfig();        
-    }
-    free(buffer);
+    }    
     // setting uart receive timeout
     //setReadTimeOut(getReadTimeOut()); //readtimeout new // TODO : uncomment for modbus
     return ESP_OK;
@@ -236,7 +271,8 @@ esp_err_t loadConfig() {
     if ((loadNetworkConfig() == ESP_OK) && 
         (loadServiceConfig() == ESP_OK) && 
         (loadDevices() == ESP_OK) &&
-        (loadDMXDevices() == ESP_OK)) {
+        (loadDMXDevices() == ESP_OK) &&
+        (loadTemperatures() == ESP_OK)) {
         return ESP_OK;
     }    
     return ESP_FAIL;
@@ -272,17 +308,38 @@ bool isReboot() {
     return reboot;
 }
 
-void setErrorText(char **response, const char *text) {
-    // если надо аллокейтить внутри функции, то надо на вход передать адрес &dst, а внутри через *работать, в хидере **
-    *response = (char*)malloc(strlen(text)+1);
-    strcpy(*response, text);    
-    ESP_LOGE(TAG, "%s", text);
+// void setErrorText(char **response, const char *text) {
+//     // если надо аллокейтить внутри функции, то надо на вход передать адрес &dst, а внутри через *работать, в хидере **
+//     *response = (char*)malloc(strlen(text)+1);
+//     strcpy(*response, text);    
+//     ESP_LOGE(TAG, "%s", text);
+// }
+
+void setErrorText(char **response, const char *text, ...) {
+    char dest[1024]; // maximum lenght
+    va_list argptr;
+    va_start(argptr, text);
+    vsprintf(dest, text, argptr);
+    va_end(argptr);
+    *response = (char*)malloc(strlen(dest)+1);
+    strcpy(*response, dest);
+    ESP_LOGE(TAG, "%s", dest);
 }
 
-void setText(char **response, const char *text) {
-    *response = (char*)malloc(strlen(text)+1);
-    strcpy(*response, text);    
-    ESP_LOGI(TAG, "%s", text);
+// void setText(char **response, const char *text) {
+//     *response = (char*)malloc(strlen(text)+1);
+//     strcpy(*response, text);    
+//     ESP_LOGI(TAG, "%s", text);
+// }
+void setText(char **response, const char *text, ...) {
+    char dest[1024]; // maximum lenght
+    va_list argptr;
+    va_start(argptr, text);
+    vsprintf(dest, text, argptr);
+    va_end(argptr);
+    *response = (char*)malloc(strlen(dest)+1);
+    strcpy(*response, dest);
+    ESP_LOGI(TAG, "%s", dest);
 }
 
 esp_err_t getDevicesTree(char **response) {
@@ -409,6 +466,63 @@ esp_err_t getDevicesAlice(char **response, char* requestId) {
         }        
         childDevice = childDevice->next;
     }
+    // TODO : add DMX devices
+    childDevice = DMXdevices->child;
+    while (childDevice) {        
+        if (cJSON_IsTrue(cJSON_GetObjectItem(childDevice, "alice"))) {
+            cJSON *dev = cJSON_CreateObject();            
+            cJSON_AddItemToObject(dev, "id", cJSON_CreateString(cJSON_GetObjectItem(childDevice, "id")->valuestring));
+            
+            cJSON_AddItemToObject(dev, "name", cJSON_CreateString(cJSON_GetObjectItem(childDevice, "name")->valuestring));
+            cJSON_AddItemToObject(dev, "description", cJSON_CreateString(cJSON_GetObjectItem(childDevice, "description")->valuestring));
+            cJSON_AddItemToObject(dev, "room", cJSON_CreateString(cJSON_GetObjectItem(childDevice, "room")->valuestring));
+
+            cJSON_AddItemToObject(dev, "type", cJSON_CreateString("devices.types.light"));
+            cJSON *cdata = cJSON_CreateObject();
+            cJSON_AddItemToObject(cdata, "slaveid", cJSON_CreateNumber(cJSON_GetObjectItem(childDevice, "slaveid")->valueint));
+            cJSON_AddItemToObject(cdata, "output", cJSON_CreateNumber(cJSON_GetObjectItem(childDevice, "outputid")->valueint));
+            cJSON_AddItemToObject(dev, "custom_data", cdata);
+            cJSON *capabilities = cJSON_CreateArray();
+            // пока константой для всех
+            cJSON *capability = cJSON_CreateObject();
+            cJSON_AddItemToObject(capability, "type", cJSON_CreateString("devices.capabilities.on_off"));
+            cJSON_AddItemToArray(capabilities, capability); 
+
+            // brightness
+            capability = cJSON_CreateObject();
+            cJSON_AddItemToObject(capability, "type", cJSON_CreateString("devices.capabilities.range"));
+            cJSON_AddItemToObject(capability, "retrievable", cJSON_CreateTrue());
+            cJSON *parameters = cJSON_CreateObject();
+            cJSON_AddItemToObject(parameters, "instance", cJSON_CreateString("brightness"));
+            cJSON_AddItemToObject(parameters, "random_access", cJSON_CreateTrue());
+            cJSON_AddItemToObject(parameters, "unit", cJSON_CreateString("unit.percent"));
+            cJSON *range = cJSON_CreateObject();
+            cJSON_AddItemToObject(range, "max", cJSON_CreateNumber(100));
+            cJSON_AddItemToObject(range, "min", cJSON_CreateNumber(0));
+            cJSON_AddItemToObject(range, "precision", cJSON_CreateNumber(10));
+            cJSON_AddItemToObject(parameters, "range", range);                                    
+            cJSON_AddItemToObject(capability, "parameters", parameters);
+            cJSON_AddItemToArray(capabilities, capability);
+
+            // hsv
+            capability = cJSON_CreateObject();
+            cJSON_AddItemToObject(capability, "type", cJSON_CreateString("devices.capabilities.color_setting"));
+            cJSON_AddItemToObject(capability, "retrievable", cJSON_CreateTrue());
+            parameters = cJSON_CreateObject();
+            cJSON_AddItemToObject(parameters, "color_model", cJSON_CreateString("hsv"));            
+            cJSON *temperature_k = cJSON_CreateObject();
+            cJSON_AddItemToObject(temperature_k, "max", cJSON_CreateNumber(4500));
+            cJSON_AddItemToObject(temperature_k, "min", cJSON_CreateNumber(2700));
+            
+            cJSON_AddItemToObject(parameters, "temperature_k", temperature_k);                                    
+            cJSON_AddItemToObject(capability, "parameters", parameters);
+            cJSON_AddItemToArray(capabilities, capability);
+            cJSON_AddItemToObject(dev, "capabilities", capabilities);
+            cJSON_AddItemToArray(devs, dev);
+        }        
+        childDevice = childDevice->next;
+    }
+
 
     cJSON_AddItemToObject(payload, "devices", devs);
     cJSON_AddItemToObject(devAlice, "payload", payload); 
@@ -452,70 +566,8 @@ esp_err_t getDevice(char **response, uint8_t slaveId) {
     return ESP_FAIL;    
 }
 
-// Обновление данных устройства по slaveid
-// /device?slaveid=1 
-esp_err_t setDevice(char **response, uint8_t slaveId, char *content) {    
-    // edit device
-    // if slaveid = 0 - new device
-    // хотя можно было и реальный указать, а в функции проверить - если есть - заменить, если нет - добавить как новый
-    
-    ESP_LOGI(TAG, "setDevice");
-
-    if (!cJSON_IsObject(devices) && !cJSON_IsArray(devices)) {
-        setErrorText(response, "devices is not a json");
-        return ESP_FAIL;        
-    }
-
-    //new data
-    cJSON *data = cJSON_Parse(content);
-    if(!cJSON_IsObject(data))
-    {
-        setErrorText(response, "Can't parse content");
-        return ESP_FAIL;
-    }
-    
-    if (!cJSON_IsNumber(cJSON_GetObjectItem(data, "slaveid"))) {
-        setErrorText(response, "No slaveId");
-        return ESP_FAIL;
-    }
-    // name and description are optional fields
-
-    if (!cJSON_IsArray(devices) || cJSON_GetArraySize(devices) == 0) {
-        // create new element device
-        devices = cJSON_CreateArray();
-        cJSON_AddItemToArray(devices, data);        
-        //*response = cJSON_Print(data);
-        setText(response, "OK");
-        cJSON_Delete(data);
-        return ESP_OK;
-    }
-
-    // new device
-    if (slaveId == 0) {
-        // check for already exists
-        slaveId = cJSON_GetObjectItem(data, "slaveid")->valueint;
-        cJSON *childDevice = devices->child;        
-        while (childDevice)
-        {   
-            if (cJSON_GetObjectItem(childDevice, "slaveid")->valueint == slaveId) {
-                // update data
-                setErrorText(response, "Device already exists!");
-                cJSON_Delete(data);
-                return ESP_FAIL;                
-            }
-            childDevice = childDevice->next;
-        }
-        ESP_LOGI(TAG, "Adding new device");
-        cJSON_AddItemToArray(devices, data);    
-        //cJSON_AddItemReferenceToArray(devices, data);   
-        //cJSON_Delete(data); // do not delete data!!!        
-        //*response = cJSON_Print(data);
-        setText(response, "OK");
-        saveDevices();
-        return ESP_OK;
-    }
-
-    // first delete existing device
+uint8_t findDeviceIndex(uint8_t slaveId) {
+    // функция находит индекс устройства для последующего удаления или просто для определения его наличия
     uint8_t idx = 0;
     bool found = false;
     cJSON *childDevice = devices->child;        
@@ -529,15 +581,52 @@ esp_err_t setDevice(char **response, uint8_t slaveId, char *content) {
         childDevice = childDevice->next;        
         idx++;
     }
+    if (!found)
+        idx = 0;
+    return idx;
+}
 
-    if (!found) {
-        setText(response, "Device not found!");
-        cJSON_Delete(data);
+// Обновление данных устройства по slaveid
+// /device?slaveid=1 
+esp_err_t setDevice(char **response, uint8_t slaveId, char *content) {    
+    // if slaveid = 0 - new device    
+    // content при редактировании приходит весь, т.е. устройство со всеми дочерними объектами, поэтому можно смело удалять и писать заново
+    ESP_LOGI(TAG, "setDevice. slaveId %d", slaveId);
+    //ESP_LOGI(TAG, "content %s", content);
+
+    //new data
+    cJSON *data = cJSON_Parse(content);
+    if(!cJSON_IsObject(data)) {
+        setErrorText(response, "Can't parse content!");
         return ESP_FAIL;
     }
-    // then add new device   
-    cJSON_AddItemToArray(devices, data);        
-    //cJSON_Delete(data);    
+    
+    if (!cJSON_IsNumber(cJSON_GetObjectItem(data, "slaveid"))) {
+        setErrorText(response, "No slaveId in new data!");
+        return ESP_FAIL;
+    }
+    // name and description are optional fields
+
+    // если slaveId = 0 - то это добавление нового устройства, а если не 0, значит обновление старого
+    // нельзя добавить два устройства с одним slaveid
+    // соответственно, нельзя обновить slaveid существующее устройства на неуникальный
+    uint8_t newSlaveId = cJSON_GetObjectItem(data, "slaveid")->valueint;
+    if (newSlaveId != slaveId) {
+        // обновление slaveId, надо проверить на дубликат
+        if (findDeviceIndex(newSlaveId) > 0) {
+            ESP_LOGI(TAG, "Device with slaveid %d already exists.", newSlaveId);
+            setErrorText(response, "Device with slaveid already exists");
+            cJSON_Delete(data);
+            return ESP_FAIL;
+        }
+    }
+    // try to find and delete existing device
+    uint8_t idx = findDeviceIndex(newSlaveId);
+    if (idx > 0) {
+        cJSON_DeleteItemFromArray(devices, idx);
+    }
+    // adding device as new
+    cJSON_AddItemToArray(devices, data);
     setText(response, "OK");
     saveDevices();
     return ESP_OK;      
@@ -601,8 +690,7 @@ esp_err_t setDMXDevices(char **response, char *content) {
 
     //new data
     cJSON *data = cJSON_Parse(content);
-    if(!cJSON_IsArray(data))
-    {
+    if(!cJSON_IsArray(data)) {
         setErrorText(response, "Can't parse content. Not json array!");
         return ESP_FAIL;
     }
@@ -617,57 +705,138 @@ esp_err_t setDMXDevices(char **response, char *content) {
     return ESP_OK;
 }
 
-/*
-esp_err_t setDMXDevice(char **response, char *content) {    
-    // add/edit DMXdevice
-    // обновит текущее устройство по айди или добавит новое если такого нет    
-    ESP_LOGI(TAG, "setDMXDevice");
-
-    if (!cJSON_IsArray(DMXdevices)) {
-        setErrorText(response, "DMXdevices is not a json");
-        return ESP_FAIL;        
+esp_err_t getTemperatures(char **response) {
+    ESP_LOGI(TAG, "getTemperatures");
+    if (!cJSON_IsArray(temperaturesData)) {      
+        //setErrorText(response, "DMXdevices is not a json array");
+        *response = cJSON_Print(cJSON_CreateArray());
+        return ESP_OK;
     }
+    
+    *response = cJSON_Print(temperaturesData);
+    return ESP_OK;    
+}
+
+esp_err_t setTemperatures(char **response, char *content) {        
+    // тупо обновит весь массив 
+    ESP_LOGI(TAG, "setTemperatures");
 
     //new data
     cJSON *data = cJSON_Parse(content);
-    if(!cJSON_IsObject(data))
-    {
-        setErrorText(response, "Can't parse content");
+    if(!cJSON_IsArray(data)) {
+        setErrorText(response, "Can't parse content. Not json array!");
         return ESP_FAIL;
-    }
-    
-    char *Id;
-    if (!cJSON_IsString(cJSON_GetObjectItem(data, "id"))) {
-        setErrorText(response, "No Id");
-        return ESP_FAIL;
-    } else {
-        Id = cJSON_GetObjectItem(data, "id")->valuestring;
     }
     
     // TODO : добавить валидацию payload
-    // ищем существующий айди в массиве и удаляем его если найдем, далее просто добавляем все, что есть
-    uint8_t idx = 0;
-    // bool found = false;
-    cJSON *childDevice = DMXdevices->child;        
-    while (childDevice) {
-        if (!strcmp(cJSON_GetObjectItem(childDevice, "slaveid")->valuestring, Id)) {
-            ESP_LOGI(TAG, "Deleting existing device");
-            cJSON_DeleteItemFromArray(DMXdevices, idx);            
-            // found = true;
-            break;
-        }        
-        childDevice = childDevice->next;        
-        idx++;
+    if (cJSON_IsObject(temperaturesData)) {
+        cJSON_Delete(temperaturesData);
     }
-
-    // set new DMX device        
-    ESP_LOGI(TAG, "Adding new device");
-    cJSON_AddItemToArray(devices, data);            
+    temperaturesData = data;    
     setText(response, "OK");
-    saveDMXDevices();
+    saveTemperatures();
     return ESP_OK;
 }
-*/
+
+void getTempColors(uint16_t temp, uint8_t *r, uint8_t *g, uint8_t *b, uint8_t *w) {
+    // TODO : make getter colors
+    bool found = false;
+    if (cJSON_IsArray(temperaturesData)) {
+        cJSON *child = temperaturesData->child;
+        while (child) {
+            if (cJSON_GetObjectItem(child, "temp")->valueint == temp) {
+                *r = cJSON_GetObjectItem(cJSON_GetObjectItem(child, "values"), "r")->valueint;
+                *g = cJSON_GetObjectItem(cJSON_GetObjectItem(child, "values"), "g")->valueint;
+                *b = cJSON_GetObjectItem(cJSON_GetObjectItem(child, "values"), "b")->valueint;
+                *w = cJSON_GetObjectItem(cJSON_GetObjectItem(child, "values"), "w")->valueint;
+                found = true;
+                break;
+            }
+            child = child->next;
+        }
+    }
+
+    if (!found) {
+        // default values
+        *r = 0;
+        *g = 0;
+        *b = 0;
+        *w = 255;
+    }    
+}
+
+void processDMXDevices() {
+    // выставить значения ДМХ согласно имеющимся данным
+    uint8_t r=0,g=0,b=0,s=0,v=0,w=0;
+    uint16_t h,temp=2700;    
+    uint16_t ra=0,ga=0,ba=0,wa=0;
+    cJSON *childDevice = DMXdevices->child;        
+    while (childDevice) {
+        if (cJSON_IsString(cJSON_GetObjectItem(childDevice, "curMode"))) {
+            // проще всего управлять яркостью через модель HSV
+            // get brightness
+            uint8_t brightness = 0xFF;
+            if (cJSON_IsNumber(cJSON_GetObjectItem(childDevice, "brightness"))) {
+                brightness = cJSON_GetObjectItem(childDevice, "brightness")->valueint;
+            }
+            // get dmx channels
+            if (cJSON_IsNumber(cJSON_GetObjectItem(cJSON_GetObjectItem(childDevice, "address"), "r")))
+                ra = cJSON_GetObjectItem(cJSON_GetObjectItem(childDevice, "address"), "r")->valueint;
+            if (cJSON_IsNumber(cJSON_GetObjectItem(cJSON_GetObjectItem(childDevice, "address"), "g")))
+                ga = cJSON_GetObjectItem(cJSON_GetObjectItem(childDevice, "address"), "g")->valueint;
+            if (cJSON_IsNumber(cJSON_GetObjectItem(cJSON_GetObjectItem(childDevice, "address"), "b")))
+                ba = cJSON_GetObjectItem(cJSON_GetObjectItem(childDevice, "address"), "b")->valueint;
+            if (cJSON_IsNumber(cJSON_GetObjectItem(cJSON_GetObjectItem(childDevice, "address"), "w")))
+                wa = cJSON_GetObjectItem(cJSON_GetObjectItem(childDevice, "address"), "w")->valueint;
+            
+            if (!strcmp(cJSON_GetObjectItem(childDevice, "curMode")->valuestring, "RGB")) {
+                // first convert to HSV
+                if (cJSON_IsNumber(cJSON_GetObjectItem(cJSON_GetObjectItem(childDevice, "RGB"), "r")))
+                    r = cJSON_GetObjectItem(cJSON_GetObjectItem(childDevice, "RGB"), "r")->valueint;
+                if (cJSON_IsNumber(cJSON_GetObjectItem(cJSON_GetObjectItem(childDevice, "RGB"), "g")))
+                    g = cJSON_GetObjectItem(cJSON_GetObjectItem(childDevice, "RGB"), "g")->valueint;
+                if (cJSON_IsNumber(cJSON_GetObjectItem(cJSON_GetObjectItem(childDevice, "RGB"), "b")))
+                    b = cJSON_GetObjectItem(cJSON_GetObjectItem(childDevice, "RGB"), "b")->valueint;
+                rgb2hsv(r, g, b, &h, &s, &v);
+            } else if (!strcmp(cJSON_GetObjectItem(childDevice, "curMode")->valuestring, "HSV")) {
+                // copy values as is
+                if (cJSON_IsNumber(cJSON_GetObjectItem(cJSON_GetObjectItem(childDevice, "HSV"), "h")))
+                    h = cJSON_GetObjectItem(cJSON_GetObjectItem(childDevice, "HSV"), "h")->valueint;
+                if (cJSON_IsNumber(cJSON_GetObjectItem(cJSON_GetObjectItem(childDevice, "HSV"), "s")))
+                    s = cJSON_GetObjectItem(cJSON_GetObjectItem(childDevice, "HSV"), "s")->valueint;
+                if (cJSON_IsNumber(cJSON_GetObjectItem(cJSON_GetObjectItem(childDevice, "HSV"), "v")))
+                    v = cJSON_GetObjectItem(cJSON_GetObjectItem(childDevice, "HSV"), "v")->valueint;            
+            } else if (!strcmp(cJSON_GetObjectItem(childDevice, "curMode")->valuestring, "TEMP")) {
+                if (cJSON_IsNumber(cJSON_GetObjectItem(childDevice, "temperature")))
+                    temp = cJSON_GetObjectItem(childDevice, "temperature")->valueint;
+                // get table values
+                getTempColors(temp, &r, &g, &b, &w);
+                //ESP_LOGI(TAG, "temp %d, r %d, g %d, b %d, w %d", temp, &r, &g, &b, &w)
+                // как менять яркость?
+                // 1 вариант - конвертировать в HSV, а канал белого пропорционально уменьшить
+                rgb2hsv(r, g, b, &h, &s, &v);
+                // вариант 2. принимать значения как РГБ и потом каким-то образом применять яркость, тогда не будет двойного преобразования
+            }
+
+            // after correct brightness if it exists
+            if (brightness <= 100) {
+                v = brightness;
+                if (w) {
+                    w = w * brightness / 100.0;
+                }
+            }
+
+            // set final values        
+            hsv2rgb(h, s, v, &r, &g, &b);
+            setDMXData(ra, r);
+            setDMXData(ga, g);
+            setDMXData(ba, b);
+            setDMXData(wa, w);
+        }
+        childDevice = childDevice->next;                
+    }
+
+}
 
 // Получение списка выходов со статусом
 // /outputs?slaveid=2
@@ -706,13 +875,9 @@ esp_err_t getOutputs(char **response, unsigned char slaveId) {
 esp_err_t setOutputs(char **response, unsigned char slaveId, char *content) {   
     // set outputs
     // можно тупо удалить все выходы устройства и потом по новой записать массив
-    ESP_LOGI(TAG, "setOutputs");
-
-    if (!cJSON_IsObject(devices) && !cJSON_IsArray(devices)) {
-        setErrorText(response, "devices is not a json");
-        return ESP_FAIL;        
-    }
-
+    ESP_LOGI(TAG, "setOutputs. DeviceId is %d", slaveId);
+    ESP_LOGI(TAG, "content %s", content);
+    
     //new data
     cJSON *data = cJSON_Parse(content);
     if(!cJSON_IsArray(data))
@@ -735,7 +900,7 @@ esp_err_t setOutputs(char **response, unsigned char slaveId, char *content) {
             setErrorText(response, "Property room not set");            
             return ESP_FAIL;
         }
-        if (!cJSON_IsNumber(cJSON_GetObjectItem(childData, "id"))) {
+        if (!cJSON_IsNumber(cJSON_GetObjectItem(childData, "id"))) {            
             setErrorText(response, "Property id not set"); // TODO : which id
             return ESP_FAIL;
         }       
@@ -799,12 +964,7 @@ esp_err_t getInputs(char **response, unsigned char slaveId) {
 esp_err_t setInputs(char **response, unsigned char slaveId, char *content) {    
     // set inputs
     // Обновить данные по существующим входам, остальные удаляются вместе с правилами
-    ESP_LOGI(TAG, "setInputs");
-
-    if (!cJSON_IsObject(devices) && !cJSON_IsArray(devices)) {
-        setErrorText(response, "devices is not a json");
-        return ESP_FAIL;        
-    }
+    ESP_LOGI(TAG, "setInputs. Device id %d", slaveId);
 
     //new data
     cJSON *data = cJSON_Parse(content);
@@ -1281,11 +1441,198 @@ esp_err_t setOutput(char **response, uint8_t slaveId, uint8_t outputId, uint8_t 
     return ESP_OK;  
 }
 
+cJSON* setActionAliceRGB(cJSON *device) {
+    // set device and return answer
+    // {"id":"lamp-001-xdl","capabilities":[{"type":"devices.capabilities.color_setting","state":{"instance":"temperature_k","value":2700}}]}    
+    // {"id":"lamp-001-xdl","capabilities":[{"type":"devices.capabilities.color_setting","state":{"instance":"hsv","value":{"h":135,"s":96,"v":100}}}]}    
+    // {"id":"lamp-001-xdl","capabilities":[{"type":"devices.capabilities.color_setting","state":{"instance":"rgb","value":{"r":135,"g":96,"b":100}}}]}    
+    // {"id":"lamp-002-xdl","capabilities":[{"type":"devices.capabilities.on_off","state":{"instance":"on","value":true}}],"custom_data":{"output":0,"slaveid":3}}
+    // {"id":"lamp-002-xdl","capabilities":[{"type":"devices.capabilities.range","state":{"instance":"brightness","value":50}}],"custom_data":{"output":0,"slaveid":3}}
+    char *id = cJSON_GetObjectItem(device, "id")->valuestring;
+    // make answer
+    cJSON *dev = cJSON_CreateObject();
+    cJSON_AddItemToObject(dev, "id", cJSON_CreateString(id));
+    cJSON *capabilities = cJSON_CreateArray();
+
+    cJSON *childCapability = cJSON_GetObjectItem(device, "capabilities")->child;        
+    while (childCapability) {                
+        if (!strcmp(cJSON_GetObjectItem(childCapability, "type")->valuestring, "devices.capabilities.on_off")) {
+            // if it on_off switch slaveid and output 
+            uint8_t slaveId = cJSON_GetObjectItem(cJSON_GetObjectItem(device, "custom_data"), "slaveid")->valueint;
+            uint8_t outputId = cJSON_GetObjectItem(cJSON_GetObjectItem(device, "custom_data"), "output")->valueint;        
+            uint8_t action = 0;
+            if (cJSON_IsTrue(cJSON_GetObjectItem(cJSON_GetObjectItem(childCapability, "state"), "value"))) {
+                action = 1;            
+            }
+            setCoilQueue(slaveId, outputId, action);                     
+        } else if (!strcmp(cJSON_GetObjectItem(childCapability, "type")->valuestring, "devices.capabilities.color_setting")) {
+            if (!strcmp(cJSON_GetObjectItem(cJSON_GetObjectItem(childCapability, "state"), "instance")->valuestring, "hsv")) {
+                uint16_t h = cJSON_GetObjectItem(cJSON_GetObjectItem(cJSON_GetObjectItem(childCapability, "state"), "value"), "h")->valueint;
+                uint8_t s = cJSON_GetObjectItem(cJSON_GetObjectItem(cJSON_GetObjectItem(childCapability, "state"), "value"), "s")->valueint;
+                uint8_t v = cJSON_GetObjectItem(cJSON_GetObjectItem(cJSON_GetObjectItem(childCapability, "state"), "value"), "v")->valueint;
+                // find device and set the values                
+                cJSON *childDMXDevice = DMXdevices->child;
+                while (childDMXDevice) {
+                    if (!strcmp(cJSON_GetObjectItem(childDMXDevice, "id")->valuestring, id)) {
+                        // set HSV values
+                        cJSON *hsv = cJSON_CreateObject();
+                        cJSON_AddItemToObject(hsv, "h", cJSON_CreateNumber(h));
+                        cJSON_AddItemToObject(hsv, "s", cJSON_CreateNumber(s));
+                        cJSON_AddItemToObject(hsv, "v", cJSON_CreateNumber(v));
+                        // if (cJSON_IsObject(cJSON_GetObjectItem(childDMXDevice, "HSV"))) {
+                        //     ESP_LOGW(TAG, "HSW is object, deleting");                            
+                        //     cJSON_Delete(cJSON_GetObjectItem(childDMXDevice, "HSV"));
+                        // }
+                        cJSON_ReplaceItemInObject(childDMXDevice, "HSV", hsv);
+                        // ESP_LOGI(TAG, "DMXdevices %s", cJSON_Print(DMXdevices));
+                        //ESP_LOGW(TAG, "hsv %s", cJSON_Print(hsv));
+                        // cJSON_AddItemToObject(childDMXDevice, "HSV", hsv);                         
+                        // ESP_LOGI(TAG, "DMXdevices %s", cJSON_Print(DMXdevices));
+                        // if (!cJSON_IsInvalid(cJSON_GetObjectItem(childDMXDevice, "curMode"))) {
+                        //     ESP_LOGW(TAG, "curMode isn't cJSON_IsInvalid, deleting");        
+                        //     cJSON_Delete(cJSON_GetObjectItem(childDMXDevice, "curMode"));                            
+                        // }
+                        // ESP_LOGI(TAG, "DMXdevices %s", cJSON_Print(DMXdevices));
+                        //cJSON_AddItemToObject(childDMXDevice, "curMode", cJSON_CreateString("HSV"));                         
+                        // cJSON_AddStringToObject(childDMXDevice, "curMode", "HSV");
+                        cJSON_ReplaceItemInObject(childDMXDevice, "curMode", cJSON_CreateString("HSV"));
+                        break;
+                    }
+                    childDMXDevice = childDMXDevice->next;
+                }
+            } else if (!strcmp(cJSON_GetObjectItem(cJSON_GetObjectItem(childCapability, "state"), "instance")->valuestring, "rgb")) {
+                uint8_t r=0, g=0, b=0;
+                if (cJSON_IsNumber(cJSON_GetObjectItem(cJSON_GetObjectItem(cJSON_GetObjectItem(childCapability, "state"), "value"), "r")))
+                    r = cJSON_GetObjectItem(cJSON_GetObjectItem(cJSON_GetObjectItem(childCapability, "state"), "value"), "r")->valueint;
+                if (cJSON_IsNumber(cJSON_GetObjectItem(cJSON_GetObjectItem(cJSON_GetObjectItem(childCapability, "state"), "value"), "g")))
+                    g = cJSON_GetObjectItem(cJSON_GetObjectItem(cJSON_GetObjectItem(childCapability, "state"), "value"), "g")->valueint;
+                if (cJSON_IsNumber(cJSON_GetObjectItem(cJSON_GetObjectItem(cJSON_GetObjectItem(childCapability, "state"), "value"), "b")))
+                    b = cJSON_GetObjectItem(cJSON_GetObjectItem(cJSON_GetObjectItem(childCapability, "state"), "value"), "b")->valueint;
+                // find device and set the values
+                cJSON *childDMXDevice = DMXdevices->child;
+                while (childDMXDevice) {
+                    if (!strcmp(cJSON_GetObjectItem(childDMXDevice, "id")->valuestring, id)) {
+                        // set RGB values                        
+                        cJSON_Delete(cJSON_GetObjectItem(childDMXDevice, "RGB"));
+                        cJSON *rgb = cJSON_CreateObject();
+                        cJSON_AddItemToObject(rgb, "r", cJSON_CreateNumber(r));
+                        cJSON_AddItemToObject(rgb, "g", cJSON_CreateNumber(g));
+                        cJSON_AddItemToObject(rgb, "b", cJSON_CreateNumber(b));
+                        // cJSON_AddItemToObject(childDMXDevice, "RGB", rgb); 
+                        cJSON_ReplaceItemInObject(childDMXDevice, "RGB", rgb);
+                        // cJSON_Delete(cJSON_GetObjectItem(childDMXDevice, "curMode"));
+                        // cJSON_AddItemToObject(childDMXDevice, "curMode", cJSON_CreateString("RGB"));                         
+                        cJSON_ReplaceItemInObject(childDMXDevice, "curMode", cJSON_CreateString("RGB"));
+                        break;
+                    }
+                    childDMXDevice = childDMXDevice->next;
+                }
+            } else if (!strcmp(cJSON_GetObjectItem(cJSON_GetObjectItem(childCapability, "state"), "instance")->valuestring, "temperature_k")) {
+                uint16_t value = cJSON_GetObjectItem(cJSON_GetObjectItem(childCapability, "state"), "value")->valueint;
+                // find device and set the values
+                cJSON *childDMXDevice = DMXdevices->child;
+                while (childDMXDevice) {
+                    if (!strcmp(cJSON_GetObjectItem(childDMXDevice, "id")->valuestring, id)) {
+                        // set Temperature value                        
+                        if (cJSON_IsNumber(cJSON_GetObjectItem(childDMXDevice, "temperature")))                       
+                            cJSON_ReplaceItemInObject(childDMXDevice, "temperature", cJSON_CreateNumber(value));
+                        else
+                            cJSON_AddItemToObject(childDMXDevice, "temperature", cJSON_CreateNumber(value));                         
+
+                        
+                        // cJSON_Delete(cJSON_GetObjectItem(childDMXDevice, "temperature"));
+                        // cJSON_AddItemToObject(childDMXDevice, "temperature", cJSON_CreateNumber(value));                        
+                        // cJSON_Delete(cJSON_GetObjectItem(childDMXDevice, "curMode"));
+                        // cJSON_AddItemToObject(childDMXDevice, "curMode", cJSON_CreateString("TEMP"));                         
+                        cJSON_ReplaceItemInObject(childDMXDevice, "curMode", cJSON_CreateString("TEMP"));
+                        break;
+                    }
+                    childDMXDevice = childDMXDevice->next;
+                }
+            }
+        } else if (!strcmp(cJSON_GetObjectItem(childCapability, "type")->valuestring, "devices.capabilities.range")) {
+            // get brightness 
+            uint16_t brightness = cJSON_GetObjectItem(cJSON_GetObjectItem(childCapability, "state"), "value")->valueint;
+            // ESP_LOGI(TAG, "brightness new value %d", brightness);
+            // find device and set the values
+            cJSON *childDMXDevice = DMXdevices->child;
+            while (childDMXDevice) {
+                if (!strcmp(cJSON_GetObjectItem(childDMXDevice, "id")->valuestring, id)) {
+                    // set Temperature value 
+                    if (cJSON_IsNumber(cJSON_GetObjectItem(childDMXDevice, "brightness")))                       
+                        cJSON_ReplaceItemInObject(childDMXDevice, "brightness", cJSON_CreateNumber(brightness));
+                    else
+                        cJSON_AddItemToObject(childDMXDevice, "brightness", cJSON_CreateNumber(brightness));                         
+                    // cJSON_Delete(cJSON_GetObjectItem(childDMXDevice, "brightness"));
+                    // cJSON_AddItemToObject(childDMXDevice, "temperature", cJSON_CreateNumber(brightness));                        
+                    break;
+                }
+                childDMXDevice = childDMXDevice->next;
+            }
+        }   
+        // answer
+        cJSON *capability = cJSON_CreateObject();
+        cJSON_AddItemToObject(capability, "type", cJSON_CreateString(cJSON_GetObjectItem(childCapability, "type")->valuestring));        
+        cJSON *state = cJSON_CreateObject();
+        cJSON_AddItemToObject(state, "instance", cJSON_CreateString(cJSON_GetObjectItem(cJSON_GetObjectItem(childCapability, "state"), "instance")->valuestring));
+        cJSON *action_result = cJSON_CreateObject();
+        cJSON_AddItemToObject(action_result, "status", cJSON_CreateString("DONE"));
+        cJSON_AddItemToObject(state, "action_result", action_result);        
+        cJSON_AddItemToObject(capability, "state", state);        
+        cJSON_AddItemToArray(capabilities, capability);
+
+        childCapability = childCapability->next;
+    }    
+    // ESP_LOGW(TAG, "DMXdevices %s", cJSON_Print(DMXdevices));
+    saveDMXDevices();
+    cJSON_AddItemToObject(dev, "capabilities", capabilities);
+    return dev;
+}   
+
+cJSON* setActionAliceSlave(cJSON *device) {
+    // set data for modbus slave
+    // get slaveid and output
+    uint8_t slaveId = cJSON_GetObjectItem(cJSON_GetObjectItem(device, "custom_data"), "slaveid")->valueint;
+    uint8_t outputId = cJSON_GetObjectItem(cJSON_GetObjectItem(device, "custom_data"), "output")->valueint;
+    uint8_t action = 0;
+    cJSON *capabilities = cJSON_GetObjectItem(device, "capabilities")->child;   
+    while (capabilities) {
+        if (!strcmp(cJSON_GetObjectItem(capabilities, "type")->valuestring, "devices.capabilities.on_off")) {
+            if (cJSON_IsTrue(cJSON_GetObjectItem(cJSON_GetObjectItem(capabilities, "state"), "value"))) {
+                action = 1;
+                break;
+            }
+        }
+        capabilities = capabilities->next;
+    }
+    setCoilQueue(slaveId, outputId, action);     
+    
+    cJSON *dev = cJSON_CreateObject();
+    cJSON_AddItemToObject(dev, "id", cJSON_CreateString(cJSON_GetObjectItem(device, "id")->valuestring));
+    cJSON *status = cJSON_CreateObject();
+    cJSON_AddItemToObject(status, "status", cJSON_CreateString("DONE")); // пока так, т.к. сразу ответ не придет, единственное можно проверить на наличие слейва и выхода в нем
+    cJSON_AddItemToObject(dev, "action_result", status);        
+        
+    // cJSON_AddItemToObject(dev, "type", cJSON_CreateString("devices.capabilities.on_off"));
+    // cJSON_AddItemToObject(dev, "state", state);
+    return dev;    
+}
+
+bool isRGBDevice(char* id) {
+    cJSON *childDevice = DMXdevices->child;        
+    while (childDevice) {
+        if (!strcmp(cJSON_GetObjectItem(childDevice, "id")->valuestring, id)) {
+            return true;
+        }        
+        childDevice = childDevice->next;                
+    }    
+    return false;
+}
+
 esp_err_t setActionAlice(char **response, char *content, char* requestId) { 
     // выставить значение устройства алисы    
     ESP_LOGI(TAG, "setActionAlice");     
-    uint8_t slaveId, outputId, action = 0;
-
+    
     cJSON *payload = cJSON_Parse(content);
     if(!cJSON_IsObject(payload))
     {
@@ -1301,37 +1648,22 @@ esp_err_t setActionAlice(char **response, char *content, char* requestId) {
     cJSON *payloadResponse = cJSON_CreateObject();
     cJSON *devs = cJSON_CreateArray(); 
     cJSON *dev = NULL;   
-    // cJSON *state = cJSON_CreateObject();
-    cJSON *status = NULL;
-
+    
     cJSON *childDevice = cJSON_GetObjectItem(cJSON_GetObjectItem(payload, "payload"), "devices")->child;            
     while (childDevice) {
-        // get slaveid and output
-        slaveId = cJSON_GetObjectItem(cJSON_GetObjectItem(childDevice, "custom_data"), "slaveid")->valueint;
-        outputId = cJSON_GetObjectItem(cJSON_GetObjectItem(childDevice, "custom_data"), "output")->valueint;
-        action = 0;
-        cJSON *capabilities = cJSON_GetObjectItem(childDevice, "capabilities")->child;   
-        while (capabilities) {
-            if (!strcmp(cJSON_GetObjectItem(capabilities, "type")->valuestring, "devices.capabilities.on_off")) {
-                if (cJSON_IsTrue(cJSON_GetObjectItem(cJSON_GetObjectItem(capabilities, "state"), "value"))) {
-                    action = 1;
-                    break;
-                }
+        // check if it RGB device
+        if (cJSON_IsString(cJSON_GetObjectItem(childDevice, "id"))) {
+            if (isRGBDevice(cJSON_GetObjectItem(childDevice, "id")->valuestring)) {
+                dev = setActionAliceRGB(childDevice);  
+            } else {
+                dev = setActionAliceSlave(childDevice);
             }
-            capabilities = capabilities->next;
+            // write answer
+            cJSON_AddItemToArray(devs, dev);  
+        } else {
+            // device without id??!!
+            ESP_LOGE(TAG, "device without id!");
         }
-        setCoilQueue(slaveId, outputId, action);                
-
-        // cJSON_AddItemToObject(state, "instance", cJSON_CreateString("on"));
-        dev = cJSON_CreateObject();
-        cJSON_AddItemToObject(dev, "id", cJSON_CreateString(cJSON_GetObjectItem(childDevice, "id")->valuestring));
-        status = cJSON_CreateObject();
-        cJSON_AddItemToObject(status, "status", cJSON_CreateString("DONE")); // пока так, т.к. сразу ответ не придет, единственное можно проверить на наличие слейва и выхода в нем
-        cJSON_AddItemToObject(dev, "action_result", status);        
-        
-        // cJSON_AddItemToObject(dev, "type", cJSON_CreateString("devices.capabilities.on_off"));
-        // cJSON_AddItemToObject(dev, "state", state);
-        cJSON_AddItemToArray(devs, dev);
         childDevice = childDevice->next;
     }
         
@@ -1400,6 +1732,7 @@ esp_err_t getQueryDevicesAlice(char **response, char *content, char* requestId) 
     cJSON *childDevice = cJSON_GetObjectItem(payload, "devices")->child;            
     while (childDevice) {
         // get slaveid and output
+        // пока предположим что есть у всех, но потом надо проверку на наличие сделать        
         slaveId = cJSON_GetObjectItem(cJSON_GetObjectItem(childDevice, "custom_data"), "slaveid")->valueint;
         outputId = cJSON_GetObjectItem(cJSON_GetObjectItem(childDevice, "custom_data"), "output")->valueint;
         value = getOutputState(slaveId, outputId);
@@ -1417,6 +1750,52 @@ esp_err_t getQueryDevicesAlice(char **response, char *content, char* requestId) 
         cJSON_AddItemToObject(capability, "type", cJSON_CreateString("devices.capabilities.on_off"));
         cJSON_AddItemToObject(capability, "state", state);
         cJSON_AddItemToArray(capabilities, capability);    
+        // check for DMX devices
+        cJSON *childDMXDevice = DMXdevices->child;
+        while (childDMXDevice) {
+            if (!strcmp(cJSON_GetObjectItem(childDevice, "id")->valuestring, 
+                        cJSON_GetObjectItem(childDMXDevice, "id")->valuestring)) {                
+                // color_settings
+                capability = cJSON_CreateObject();
+                cJSON_AddItemToObject(capability, "type", cJSON_CreateString("devices.capabilities.color_setting"));
+                if (!strcmp(cJSON_GetObjectItem(childDMXDevice, "curMode")->valuestring, "HSV")) {                    
+                    state = cJSON_CreateObject();
+                    cJSON_AddItemToObject(state, "instance", cJSON_CreateString("hsv"));
+                    cJSON *cvalue = cJSON_CreateObject();
+                    cJSON_AddItemToObject(cvalue, "h", cJSON_CreateNumber(cJSON_GetObjectItem(cJSON_GetObjectItem(childDMXDevice, "HSV"), "h")->valueint));
+                    cJSON_AddItemToObject(cvalue, "s", cJSON_CreateNumber(cJSON_GetObjectItem(cJSON_GetObjectItem(childDMXDevice, "HSV"), "s")->valueint));
+                    cJSON_AddItemToObject(cvalue, "v", cJSON_CreateNumber(cJSON_GetObjectItem(cJSON_GetObjectItem(childDMXDevice, "HSV"), "v")->valueint));
+                    cJSON_AddItemToObject(state, "value", cvalue);
+                    cJSON_AddItemToObject(capability, "state", state);    
+                } else if (!strcmp(cJSON_GetObjectItem(childDMXDevice, "curMode")->valuestring, "RGB")) {
+                    state = cJSON_CreateObject();
+                    cJSON_AddItemToObject(state, "instance", cJSON_CreateString("rgb"));
+                    uint32_t rgb = cJSON_GetObjectItem(cJSON_GetObjectItem(childDMXDevice, "RGB"), "r")->valueint << 16 |
+                                   cJSON_GetObjectItem(cJSON_GetObjectItem(childDMXDevice, "RGB"), "g")->valueint << 8 |
+                                   cJSON_GetObjectItem(cJSON_GetObjectItem(childDMXDevice, "RGB"), "b")->valueint;
+                    cJSON_AddItemToObject(state, "value", cJSON_CreateNumber(rgb));
+                    cJSON_AddItemToObject(capability, "state", state);    
+                } else if (!strcmp(cJSON_GetObjectItem(childDMXDevice, "curMode")->valuestring, "TEMP")) {
+                    state = cJSON_CreateObject();
+                    cJSON_AddItemToObject(state, "instance", cJSON_CreateString("temperature_k"));
+                    cJSON_AddItemToObject(state, "value", cJSON_CreateNumber(cJSON_GetObjectItem(childDMXDevice, "temperature")->valueint));                    
+                    cJSON_AddItemToObject(capability, "state", state);    
+                }
+                cJSON_AddItemToArray(capabilities, capability);    
+                // brightness
+                if (cJSON_IsNumber(cJSON_GetObjectItem(childDMXDevice, "brightness"))) {
+                    capability = cJSON_CreateObject();
+                    cJSON_AddItemToObject(capability, "type", cJSON_CreateString("devices.capabilities.range"));
+                    state = cJSON_CreateObject();
+                    cJSON_AddItemToObject(state, "instance", cJSON_CreateString("brightness"));
+                    cJSON_AddItemToObject(state, "value", cJSON_CreateNumber(cJSON_GetObjectItem(childDMXDevice, "brightness")->valueint));
+                    cJSON_AddItemToObject(capability, "state", state);    
+                    cJSON_AddItemToArray(capabilities, capability);    
+                }
+                break;
+            }
+            childDMXDevice = childDMXDevice->next;
+        }
         cJSON_AddItemToObject(dev, "capabilities", capabilities);
         cJSON_AddItemToArray(devs, dev);
         childDevice = childDevice->next;
@@ -1695,7 +2074,7 @@ esp_err_t uiRouter(httpd_req_t *req) {
         httpd_resp_set_type(req, "application/json");
         err = getDevicesTree(&response);
     } else if (!strcmp(uri, "/ui/device")) {
-        if ((toDecimal(getParamValue(req, "slaveid"), &slaveId) == ESP_OK) && (slaveId > 0)) {
+        if ((toDecimal(getParamValue(req, "slaveid"), &slaveId) == ESP_OK)/* && (slaveId > 0)*/) {
             if (req->method == HTTP_GET) {
                 httpd_resp_set_type(req, "application/json");
                 err = getDevice(&response, slaveId);            
@@ -1939,7 +2318,17 @@ esp_err_t uiRouter(httpd_req_t *req) {
                 err = setDMXDevices(&response, content);    
             }            
         }
-    }  
+    } else if (!strcmp(uri, "/ui/temperatures")) {
+        if (req->method == HTTP_GET) {
+            httpd_resp_set_type(req, "application/json");
+            err = getTemperatures(&response);
+        } else if (req->method == HTTP_POST) {
+            err = getContent(&content, req);
+            if (err == ESP_OK) {
+                err = setTemperatures(&response, content);    
+            }            
+        }
+    }
 
 
 
@@ -1962,25 +2351,6 @@ esp_err_t uiRouter(httpd_req_t *req) {
     free(uri);
 
     return ESP_OK;
-}
-
-void makePollingList() {
-    // формируем список для поллинга
-    pollingList[0] = 0;
-    if (!cJSON_IsArray(devices) || cJSON_GetArraySize(devices) < 1) {
-        return; 
-    }
-    uint8_t i=0;
-    cJSON *child = devices->child;
-    while (child) {
-        if (cJSON_IsTrue(cJSON_GetObjectItem(child, "polling"))) {
-            if (cJSON_GetObjectItem(child, "pollingmode")->valueint & 0x08) {
-                pollingList[i++] = cJSON_GetObjectItem(child, "slaveid")->valueint;
-                //addDataPolling(cJSON_GetObjectItem(child, "slaveid")->valueint, MB_READ_INPUTREGISTERS, 0, 3);
-            }
-        }
-        child = child->next;
-    }
 }
 
 void setDeviceOutputValues(uint8_t slaveid, uint16_t values, uint8_t offset, uint8_t size) {
@@ -2012,6 +2382,34 @@ void setDeviceOutputValues(uint8_t slaveid, uint16_t values, uint8_t offset, uin
     }
 }
 
+void setDeviceOutputValues2(uint8_t slaveid, uint8_t *values) {
+    // выставить выходы конкретного устойства в массиве устройств devices    
+    cJSON *child = devices->child;
+    while (child) {
+        if (cJSON_GetObjectItem(child, "slaveid")->valueint == slaveid) {
+            // ESP_LOGI(TAG, "Found slaveid %d for set outputs. values is %d, offset if %d, size is %d", slaveid, values, offset, size);
+            cJSON *outputs = cJSON_GetObjectItem(child, "outputs");
+            if (cJSON_IsArray(outputs)) {
+                uint8_t size = cJSON_GetArraySize(outputs);
+                cJSON *output = outputs->child;
+                while (output) {                    
+                    uint8_t id = cJSON_GetObjectItem(output, "id")->valueint;
+                    if (id < size) {
+                        uint8_t value = (values[id/8] >> (id-8*(id/8))) & 0x01;
+                        if (cJSON_IsNumber(cJSON_GetObjectItem(output, "curVal")))
+                            cJSON_ReplaceItemInObject(output, "curVal", cJSON_CreateNumber(value));                      
+                        else
+                            cJSON_AddItemToObject(output, "curVal", cJSON_CreateNumber(value));
+                    }
+                    output = output->next;  
+                }
+            }           
+            break;
+        }
+        child = child->next;
+    }
+}
+
 void setDeviceInputValues(uint8_t slaveid, uint16_t values, uint8_t offset, uint8_t size) {
     // выставить входы конкретного устойства в массиве устройств devices.
     // values - значения для входов без учета сдвига
@@ -2027,6 +2425,34 @@ void setDeviceInputValues(uint8_t slaveid, uint16_t values, uint8_t offset, uint
                         (cJSON_GetObjectItem(input, "id")->valueint < offset+size)) {
                         // invert for inputs
                         uint8_t value = ((values >> (cJSON_GetObjectItem(input, "id")->valueint-offset)) & 0x0001);
+                        if (cJSON_IsNumber(cJSON_GetObjectItem(input, "curVal")))
+                            cJSON_ReplaceItemInObject(input, "curVal", cJSON_CreateNumber(value));                      
+                        else
+                            cJSON_AddItemToObject(input, "curVal", cJSON_CreateNumber(value));
+                    }
+                    input = input->next;    
+                }
+            }           
+            break;
+        }
+        child = child->next;
+    }
+}
+
+void setDeviceInputValues2(uint8_t slaveid, uint8_t *values) {
+    // выставить входы конкретного устройства в массиве устройств devices.        
+    cJSON *child = devices->child;
+    while (child) {
+        if (cJSON_GetObjectItem(child, "slaveid")->valueint == slaveid) {
+            cJSON *inputs = cJSON_GetObjectItem(child, "inputs");
+            if (cJSON_IsArray(inputs)) {
+                uint8_t size = cJSON_GetArraySize(inputs);
+                cJSON *input = inputs->child;
+                while (input) {
+                    uint8_t id = cJSON_GetObjectItem(input, "id")->valueint;
+                    if (id < size) {
+                        // значения лежат по 8 в каждом байте, младший бит в последнем байте                        
+                        uint8_t value = (values[id/8] >> (id-8*(id/8))) & 0x01;
                         if (cJSON_IsNumber(cJSON_GetObjectItem(input, "curVal")))
                             cJSON_ReplaceItemInObject(input, "curVal", cJSON_CreateNumber(value));                      
                         else
@@ -2358,6 +2784,93 @@ void resetDevicePollingRetries(uint8_t slaveId) {
     }
 }
 
+void makePollingList() {
+    // формируем список для поллинга
+    pollingList[0] = 0;
+    if (!cJSON_IsArray(devices) || cJSON_GetArraySize(devices) < 1) {
+        return; 
+    }
+    uint8_t i=0;
+    cJSON *child = devices->child;
+    while (child) {
+        if (cJSON_IsTrue(cJSON_GetObjectItem(child, "polling"))) {
+            //if (cJSON_GetObjectItem(child, "pollingmode")->valueint & 0x08) {
+                pollingList[i++] = cJSON_GetObjectItem(child, "slaveid")->valueint;                
+            //}
+        }
+        child = child->next;
+    }
+}
+
+uint8_t getPollingMode(uint8_t slaveId) {
+    uint8_t pollingMode = 0;
+    cJSON *child = devices->child;
+    while (child) {
+        if (cJSON_GetObjectItem(child, "slaveid")->valueint == slaveId) {
+            pollingMode = cJSON_GetObjectItem(child, "pollingmode")->valueint;                
+            break;    
+        }
+        child = child->next;
+    }
+    return pollingMode;
+}
+
+uint16_t getSlaveOutputsValues(uint8_t slaveId) {
+    // get outputs values as unisigned int
+    uint16_t values = 0;
+    cJSON *child = devices->child;
+    while (child) {
+        if (cJSON_GetObjectItem(child, "slaveid")->valueint == slaveId) {
+            cJSON *outputs = cJSON_GetObjectItem(child, "outputs");
+            if (cJSON_IsArray(outputs)) {                
+                cJSON *output = outputs->child;
+                while (output) {
+                    uint8_t id = cJSON_GetObjectItem(output, "id")->valueint;
+                    if (id < 16) {
+                        // вдруг что-то не так...                        
+                        if (cJSON_IsNumber(cJSON_GetObjectItem(output, "curVal")) && 
+                            cJSON_GetObjectItem(output, "curVal")->valueint) {
+                            setbit(values, id);
+                        }                            
+                    }
+                    output = output->next;    
+                }
+            }
+            break;
+        }
+        child = child->next;
+    }
+    return values;   
+}
+
+uint32_t getSlaveInputsValues(uint8_t slaveId) {
+    // get inputs values as unisigned long
+    uint32_t values = 0;
+    cJSON *child = devices->child;
+    while (child) {
+        if (cJSON_GetObjectItem(child, "slaveid")->valueint == slaveId) {
+            cJSON *inputs = cJSON_GetObjectItem(child, "inputs");
+            if (cJSON_IsArray(inputs)) {                
+                cJSON *input = inputs->child;
+                while (input) {
+                    uint8_t id = cJSON_GetObjectItem(input, "id")->valueint;
+                    if (id < 32) {
+                        // вдруг что-то не так...                        
+                        if (cJSON_IsNumber(cJSON_GetObjectItem(input, "curVal")) && 
+                            cJSON_GetObjectItem(input, "curVal")->valueint) {
+                            setbit(values, id);
+                        }                            
+                    }
+                    input = input->next;    
+                }
+            }
+            break;
+        }
+        child = child->next;
+    }
+    return values;   
+}
+
 void queryDevice(uint8_t slaveId) {
     // опрос устройства
     // экспериментальный вариант
@@ -2373,57 +2886,87 @@ void queryDevice(uint8_t slaveId) {
     }
 
     uint8_t *response = NULL;
-    static uint8_t response1[6], response2[6], response3[6];
-    uint16_t inputs, outputs;    
-    event_t *event = malloc(sizeof(event_t));
     heap_caps_check_integrity_all(true);
-    //actions_qty = 0;                
-    if (executeModbusCommand(slaveId, MB_READ_INPUTREGISTERS, 0, 3, &response) == ESP_OK) {
-        changeDevStatus(slaveId, "online");
-        resetDevicePollingRetries(slaveId);
-        changeLEDStatus(LED_NORMAL);
-        // slaveid, command, start, qty, *response
-        //changeDevStatus(slaveId, "online");
-        event->slave_addr = slaveId;
-        if (response != NULL) {
+    esp_err_t res = ESP_FAIL;
+    
+    uint8_t pollingMode = getPollingMode(slaveId);
+    if (pollingMode == 0x04) {
+        // polling for owen
+        // поллинг без событий
+        // 512 регистр выходы 
+        // 513-514 входы 
+        res = executeModbusCommand(slaveId, MB_READ_HOLDINGS, 512, 3, &response);
+        if (res == ESP_OK) {
+            changeDevStatus(slaveId, "online");
+            resetDevicePollingRetries(slaveId);
+            //changeLEDStatus(LED_NORMAL);
+            uint8_t inputs[3];
+            inputs[0] = response[5];
+            inputs[1] = response[4];
+            inputs[2] = response[3];
+            uint32_t newInputs = (response[3] << 16) | (response[4] << 8) | (response[5]);
+            uint32_t oldInputs = getSlaveInputsValues(slaveId);
+            uint32_t diff = newInputs ^ oldInputs;
+            if (diff) {
+                // something changed
+                // make events
+                for (uint8_t i=0; i<32; i++) {
+                    if (diff >> i & 0x01) {
+                        event_t *event = malloc(sizeof(event_t));
+                        event->slave_addr = slaveId;    
+                        event->input = i;
+                        if (oldInputs >> i & 0x01)
+                            event->event = 2;
+                        else
+                            event->event = 1;
+                        processEvent(event);
+                        processActions(); // просто построит очередь, которую потом обработает processQueue                
+                        free(event);
+                    }
+                }
+            }
+
+            setDeviceInputValues2(slaveId, inputs);
+            uint8_t outputs[2];
+            outputs[0] = response[1];
+            outputs[1] = response[0];
+            setDeviceOutputValues2(slaveId, outputs);
+            // добавить событийную логику, основываясь на предыдущих значениях
+        } 
+    } else if (pollingMode == 0x08) {
+        // events polling (my devices)
+        // TODO: check for ESP_ERR_TIMEOUT
+        res = executeModbusCommand(slaveId, MB_READ_INPUTREGISTERS, 0, 3, &response);
+        if (res == ESP_OK) {
+            changeDevStatus(slaveId, "online");
+            resetDevicePollingRetries(slaveId);
+            //changeLEDStatus(LED_NORMAL);
+            uint16_t inputs, outputs;        
+            event_t *event = malloc(sizeof(event_t));
+            event->slave_addr = slaveId;    
             event->input = response[0];
             event->event = response[1];
             outputs = response[2] << 8 | response[3];
-            inputs = response[4] << 8 | response[5];
-            // for logs
-            if ((slaveId == 1) && isEqualsVals(response, response1, 6) == 0) {
-                memcpy(response1, response, 6);
-                ESP_LOGI(TAG, "SlaveId %d Outputs %d Inputs %d. Event %d on input %d", slaveId, outputs, inputs, event->event, event->input);
-            }
-            if ((slaveId == 2) && isEqualsVals(response, response2, 6) == 0) {
-                memcpy(response2, response, 6);
-                ESP_LOGI(TAG, "SlaveId %d Outputs %d Inputs %d. Event %d on input %d", slaveId, outputs, inputs, event->event, event->input);
-            }
-            if ((slaveId == 3) && isEqualsVals(response, response3, 6) == 0) {
-                memcpy(response3, response, 6);
-                ESP_LOGI(TAG, "SlaveId %d Outputs %d Inputs %d. Event %d on input %d", slaveId, outputs, inputs, event->event, event->input);
-            }
+            inputs = response[4] << 8 | response[5];        
             setDeviceOutputValues(slaveId, outputs, 0, 16);
             setDeviceInputValues(slaveId, inputs, 0, 16);
             if (event->event > 0) {
                 processEvent(event);
                 processActions(); // просто построит очередь, которую потом обработает processQueue
             }
-            free(response);        
-        } else {
-            ESP_LOGE(TAG, "Empty response");
+            free(event);
         }
-    } else {
+    }   
+
+    if (res != ESP_OK) {
         // уменьшить счетчик обращений
         if (decDevicePollingRetries(slaveId) == 0) {
             changeDevStatus(slaveId, "offline");    
-        }        
-        //changeLEDStatus(LED_ERROR);
-    }        
-    free(event);
-    // обновление входов/выходов
-    // проверка событий, добавление в очередь
-    // выполнение действий будет отдельным таском processQueue
+        }                         
+    }
+    if (response != NULL) {
+        free(response);                
+    }
 }
 
 void pollingNew() {
@@ -2499,3 +3042,69 @@ void changeLEDStatus(uint8_t status) {
 
 // Если девай отвалился, пробуем его опросить Х раз и если не ответил, оффлайн
 // По оффлайн девайсам смотреть признак поллинга и полить раз в У времени или попыток и если ответил - выводить в онлайн
+
+
+/*
+esp_err_t setDMXDevice(char **response, char *content) {    
+    // add/edit DMXdevice
+    // обновит текущее устройство по айди или добавит новое если такого нет    
+    ESP_LOGI(TAG, "setDMXDevice");
+
+    if (!cJSON_IsArray(DMXdevices)) {
+        setErrorText(response, "DMXdevices is not a json");
+        return ESP_FAIL;        
+    }
+
+    //new data
+    cJSON *data = cJSON_Parse(content);
+    if(!cJSON_IsObject(data))
+    {
+        setErrorText(response, "Can't parse content");
+        return ESP_FAIL;
+    }
+    
+    char *Id;
+    if (!cJSON_IsString(cJSON_GetObjectItem(data, "id"))) {
+        setErrorText(response, "No Id");
+        return ESP_FAIL;
+    } else {
+        Id = cJSON_GetObjectItem(data, "id")->valuestring;
+    }
+    
+    // TODO : добавить валидацию payload
+    // ищем существующий айди в массиве и удаляем его если найдем, далее просто добавляем все, что есть
+    uint8_t idx = 0;
+    // bool found = false;
+    cJSON *childDevice = DMXdevices->child;        
+    while (childDevice) {
+        if (!strcmp(cJSON_GetObjectItem(childDevice, "slaveid")->valuestring, Id)) {
+            ESP_LOGI(TAG, "Deleting existing device");
+            cJSON_DeleteItemFromArray(DMXdevices, idx);            
+            // found = true;
+            break;
+        }        
+        childDevice = childDevice->next;        
+        idx++;
+    }
+
+    // set new DMX device        
+    ESP_LOGI(TAG, "Adding new device");
+    cJSON_AddItemToArray(devices, data);            
+    setText(response, "OK");
+    saveDMXDevices();
+    return ESP_OK;
+}
+
+void setDMXDeviceValueHSV(char* id, uint16_t h, uint8_t s, uint8_t v) {
+    cJSON *childDevice = DMXdevices->child;        
+    while (childDevice) {
+        if (!strcmp(cJSON_GetObjectItem(childDevice, "id")->valuestring, id)) {        
+            // if set HSV, convert it to RGB for DMX
+            cJSON_DeleteItemFromArray(DMXdevices, idx);
+            break;
+        }
+        childDevice = childDevice->next;                
+    }
+}
+
+*/
