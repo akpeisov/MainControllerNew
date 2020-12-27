@@ -1,0 +1,35 @@
+[{
+		"slaveid":	1,
+		"name":	"1st1",
+		"description":	"first device",
+		"status":	"online",
+		"polling":	true,
+		"id":	0,
+		"autotimeout":	5000,
+		"mode":	1,
+		"ros":	true,
+		"pollingmode":	8,
+		"inverse":	false
+	}, {
+		"slaveid":	2,
+		"name":	"2ndd",
+		"description":	"test new device",
+		"status":	"online",
+		"polling":	true,
+		"id":	0,
+		"autotimeout":	5000,
+		"mode":	1,
+		"ros":	true,
+		"pollingmode":	8,
+		"inverse":	true
+	}, {
+		"slaveid":	3,
+		"name":	"test33",
+		"description":	"test333",
+		"status":	"offline",
+		"polling":	false,
+		"autotimeout":	123,
+		"ros":	true,
+		"mode":	1,
+		"pollingmode":	4
+	}]

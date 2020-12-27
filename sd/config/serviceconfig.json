@@ -1,0 +1,16 @@
+{
+	"pollingTime":	25,
+	"pollingTimeout":	100,
+	"pollingRetries":	10,
+	"waitingRetries":	200,
+	"savePeriod":	60,
+	"httpsEnable":	false,
+	"authEnable":	false,
+	"authUser":	"admin",
+	"authPass":	"admin",
+	"wdteth":	true,
+	"wdtmem":	true,
+	"wdtmemsize":	1000,
+	"readtimeout":	20,
+	"actionslaveproc":	true
+}

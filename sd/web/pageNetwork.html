@@ -1,0 +1,107 @@
+<h2>Network configuration</h2>
+<div class="cardRef">
+    <table>
+        <tbody>
+            <tr>
+            <td><label>Network mode</label>
+            <td>&nbsp;</td>
+            <td><select class="txtStr" id="networkmode">
+            <option value="0">Ethernet</option>
+            <option value="1">WiFi</option>
+            <option value="2">Ethenet&Wifi</option>
+            </select></td>
+            </tr>                   
+            <tr><td colspan="3"><br></td></tr>
+            <tr><td><label>Ethernet settings</label></td></tr>
+            <tr>
+            <td><label>DHCP Enable</label></td>
+            <td>&nbsp;</td>
+            <td><input type="checkbox" id="ethdhcp" value="1"> </td>
+            </tr>
+            <tr>                
+            <td><label>IP address</label>
+            <td>&nbsp;</td>
+            <td><input class="txtStr" type="text" id="ethip" value="" maxlength="15" title="IP address"></td>
+            </tr>
+            <tr>
+            <td><label>Netmask</label></td>
+            <td>&nbsp;</td>
+            <td><input class="txtStr" type="text" id="ethnetmask" maxlength="15" value="" title="Network mask"></td>
+            </tr>
+            <tr>
+            <td><label>Gateway</label></td>
+            <td>&nbsp;</td>
+            <td><input class="txtStr" type="text" id="ethgateway" maxlength="15" value="" title="IP gateway"></td>
+            </tr>            
+            <tr>&nbsp;</tr>
+            <tr><td colspan="3"><br></td></tr>
+            <tr><td><label>WiFi settings</label></td></tr>
+            <tr>
+            <td><label>WiFi SSID</label></td>
+            <td>&nbsp;</td>
+            <td><input class="txtStr" type="text" id="wifi_ssid" maxlength="10" value=""></td>
+            </tr>
+            <tr>
+            <td><label>WiFi password</label></td>
+            <td>&nbsp;</td>
+            <td><input class="txtStr" type="password" id="wifi_pass" maxlength="12" value=""></td>
+            </tr>
+            <tr>&nbsp;</tr>
+            <tr>
+            <td><label>DHCP Enable</label></td>
+            <td>&nbsp;</td>
+            <td><input type="checkbox" id="wifidhcp" value="1"> </td>
+            </tr>
+            <tr>                
+            <td><label>IP address</label>
+            <td>&nbsp;</td>
+            <td><input class="txtStr" type="text" id="wifiip" value="" maxlength="15" title="IP address"></td>
+            </tr>
+            <tr>
+            <td><label>Netmask</label></td>
+            <td>&nbsp;</td>
+            <td><input class="txtStr" type="text" id="wifinetmask" maxlength="15" value="" title="Network mask"></td>
+            </tr>
+            <tr>
+            <td><label>Gateway</label></td>
+            <td>&nbsp;</td>
+            <td><input class="txtStr" type="text" id="wifigateway" maxlength="15" value="" title="IP gateway"></td>
+            </tr>   
+            <tr><td colspan="3"><br></td></tr>
+
+            <tr>
+            <td><label>DNS server</label></td>
+            <td>&nbsp;</td>
+            <td><input class="txtStr" type="text" id="dns" maxlength="15" value=""></td>
+            </tr>            
+            <tr>
+            <td><label>Hostname</label></td>
+            <td>&nbsp;</td>
+            <td><input class="txtStr" type="text" id="hostname" maxlength="12" value=""></td>
+            </tr>            
+            <tr>
+            <td><label>NTP Server</label></td>
+            <td>&nbsp;</td>
+            <td><input class="txtStr" type="text" id="ntpserver" maxlength="15" value=""></td>
+            </tr>
+            <tr>
+            <td><label>NTP Timezone string</label></td>
+            <td>&nbsp;</td>
+            <td><input class="txtStr" type="text" id="ntpTZ" maxlength="20" value=""></td>
+            </tr>            
+            <tr>
+            <td><label>OTA URL</label></td>
+            <td>&nbsp;</td>
+            <td><input class="txtStr" type="text" id="otaURL" maxlength="200" value=""></td>
+            </tr>            
+        </tbody>
+    </table>
+
+    <div>&nbsp;</div>
+    <input type="button" class="s1" id="submit" value="Save Configuration &amp; Reboot" onclick="saveData();" title="Save new TCP/IP configuration settings and reboot the board" tabindex="11">
+    </div>
+    <div>&nbsp;</div>
+</div>
+<script src="js/pageNetwork.js"></script>
+
+

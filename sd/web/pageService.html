@@ -1,0 +1,98 @@
+<h2>Service configuration</h2>
+<div class="cardRef">
+    <table>
+        <tbody>
+            <tr>
+            <td><label>Polling Time, ms</label>
+            <td>&nbsp;</td>
+            <td><input class="txtStr" type="text" id="pollingTime" value="" maxlength="5" title="Polling time for modbus"></td>
+            </tr>
+            <tr>
+            <td><label>Polling device timeout, ms</label></td>
+            <td>&nbsp;</td>
+            <td><input class="txtStr" type="text" id="pollingTimeout" maxlength="5" value="" title="Timeout for polling device"></td>
+            </tr>
+            <tr>
+            <td><label>Read packet timeout, ms</label></td>
+            <td>&nbsp;</td>
+            <td><input class="txtStr" type="text" id="readtimeout" maxlength="5" value="" title="Timeout for read packet"></td>
+            </tr>
+            <tr>
+            <td><label>Polling retries before device offline</label></td>
+            <td>&nbsp;</td>
+            <td><input class="txtStr" type="text" id="pollingRetries" maxlength="5" value=""></td>
+            </tr>
+            <tr>
+            <td><label>Wait retries before polling offline device</label></td>
+            <td>&nbsp;</td>
+            <td><input class="txtStr" type="text" id="waitingRetries" maxlength="5" value=""></td>
+            </tr>
+            <tr>
+            <td><label>Don't process action on the same slave</label></td>
+            <td>&nbsp;</td>
+            <td><input type="checkbox" id="actionslaveproc" value="1"> </td>
+            </tr>
+            <tr>
+            <td><label>Saving data period, sec</label></td>
+            <td>&nbsp;</td>
+            <td><input class="txtStr" type="text" id="savePeriod" maxlength="4" value=""></td>
+            </tr>
+            <tr>&nbsp;</tr>
+            <!--
+            <tr>
+            <td><label>HTTP Server Enable</label></td>
+            <td>&nbsp;</td>
+            <td><input type="checkbox" id="httpEnable" value="1" tabindex="5"> </td>
+            </tr>
+            -->
+            <tr>
+            <td><label>HTTPS Server Enable</label></td>
+            <td>&nbsp;</td>
+            <td><input type="checkbox" id="httpsEnable" value="1"> </td>
+            </tr>
+            <tr>
+            <td><label>Authentication Enable</label></td>
+            <td>&nbsp;</td>
+            <td><input type="checkbox" id="authEnable" value="1"> </td>
+            </tr>
+            <tr>
+            <td><label>User name</label></td>
+            <td>&nbsp;</td>
+            <td><input class="txtStr" type="text" id="authUser" maxlength="15" value=""></td>
+            </tr>
+            <tr>
+            <td><label>User password</label></td>
+            <td>&nbsp;</td>
+            <td><input class="txtStr" type="password" id="authPass" maxlength="15" value=""></td>
+            </tr>
+            <tr>&nbsp;</tr>
+            <tr>
+            <td><label>WatchDog Ethernet Enable</label></td>
+            <td>&nbsp;</td>
+            <td><input type="checkbox" id="wdteth" value="1"></td>
+            </tr>
+            <tr>
+            <td><label>WatchDog Memory Enable</label></td>
+            <td>&nbsp;</td>
+            <td><input type="checkbox" id="wdtmem" value="1"></td>
+            </tr>
+            <tr>
+            <td><label>WatchDog minimum memory size</label></td>
+            <td>&nbsp;</td>
+            <td><input class="txtStr" type="text" id="wdtmemsize" maxlength="6" value=""></td>
+            </tr>  
+            <tr> 
+            <td>&nbsp;</td>
+            <td>&nbsp;</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <div>&nbsp;</div>
+    <input type="button" class="s1" id="submit" value="Save Configuration &amp; Reboot" onclick="saveData();" title="Save new TCP/IP configuration settings and reboot the board" tabindex="11">
+    </div>   
+
+</div>
+<script src="js/pageService.js"></script>
+
+

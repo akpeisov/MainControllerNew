@@ -12,6 +12,12 @@
 #include "network.h"
 #include "webServer.h"
 #include "modbus.h"
+<<<<<<< Updated upstream
+=======
+#include "ftp.h"
+#include "dmx.h"
+#include "mqtt.h"
+>>>>>>> Stashed changes
 
 static const char *TAG = "MAIN";
 
@@ -81,6 +87,7 @@ void app_main(void)
     if (initNetwork() == ESP_OK) {
         initWebServer();
     }
+    
     mbInit();    
     //sem_busy = xSemaphoreCreateMutex();
     createSemaphore();
@@ -89,4 +96,12 @@ void app_main(void)
 
     changeLEDStatus(LED_NORMAL);
     writeLog("I", "System started");
+<<<<<<< Updated upstream
+=======
+
+    initMQTT();
+    initFTP();
+    DMXInit();
+
+>>>>>>> Stashed changes
 }

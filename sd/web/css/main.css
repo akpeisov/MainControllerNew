@@ -1,0 +1,162 @@
+//div {border: 1px solid red;}
+
+body {font-family:Verdana, Arial, sans-serif; background:#5b5b5b; margin:0px auto; padding:0 0 20px 0;}
+
+#shadow-one {width:850px; border:1px solid #555; border-top:0; margin:0px auto;}
+#shadow-two {border:1px solid #4b4b4b; border-top:0;}
+#shadow-three {border:1px solid #444; border-top:0;}
+#shadow-four {border:1px solid #3a3a3a; border-top:0;}
+
+#page {border:1px solid #333; background:#fff; border-top:0; padding:20px 20px 0px 20px; font-size:10pt;}
+#page td {font-size:10pt;}
+
+#title {background:#011e38; padding:5px 4px 5px 8px; font-weight:bold; color:#fff; margin-bottom:15px; height:84px;}
+#title a:link {color:#011e38;}
+#title a:visited {color:#011e38;}
+#title a:hover {color:#011e38;}
+#title a:active {color:#011e38;}
+#title .right {float:right; width:500px; height:76px; text-align:right; font-size:20pt; vertical-align:baseline; margin-right:10px; margin-top:40px;}
+
+#menu {float:left; width:130px; padding-right:20px; padding-top:10px;}
+#menu a {width:130px; display:block; background:#011e38; color:white; padding:8px; font-weight:bold; border-bottom:1px solid #fff; text-decoration:none;}
+#menu a:hover {background:#0033FF;}
+
+#content {width:630px; float:right; padding-right:10px;}
+#content a {color:#CCCCCC; text-decoration:none;}
+#content h2 {color:#011e38; margin-top:20px; margin-left:10px;}
+
+/*Relative to config_error page*/
+#content .ref a {color:#d00;}
+
+/*Relative to reboot page */
+#content .reboot p {padding-left:20px; text-align:justify;}
+#content .rebootlink a {color:#0000BB;}
+#content .rebootlink a:hover {color:#0033FF;}
+
+.spacer {clear: both;}
+
+#footer {font-size:0.8em; color:#666; text-align:center; margin:10px 50px 0 50px; padding-top:10px; border-top:1px dotted #666;}
+#footer a {text-decoration:none;}
+#footer a:link {color:#011e38;}
+#footer a:visited {color:#011e38;}
+#footer a:hover {color:#0000FF;}
+#footer a:active {color:#0000CC;}
+
+/*Relative to Index page*/
+#status {width:600px; float:left; padding:10px;	margin:10px; border:1px dotted #666; font-weight:bold;}
+#status p {padding:5px 0 5px 10px; text-indent:-10px; margin:0;}
+
+/* For boot page */
+#content a.comment {color:#000000; text-indent:10px; text-align:justify; font-weight:normal;}
+#content p.Par {padding:5px 20px 5px 20px;}
+
+/* For textual answer */
+#status .txtAns a {color:#0066FF;}
+
+/*Relative to Board Congif page*/
+#content .cardRef {font-weight:bold;}
+#content .cardRef td {font-size:10pt; font-weight:normal;}
+#content .cardRef label {padding:20px; font-weight:bold;}
+
+/* CSS for Leds and inputs for td and anchors, also included in fieldset */
+a.staticLed {font-size:26px; text-align:center; padding-left:0px; padding-right:0px;}
+a.setLed {font-size:26px; font:bold; text-align:center; padding-left:0px; padding-right:0px; cursor:pointer;}
+td.tdLed {text-align:center; width:26px;}
+
+.styleBtn {cursor:pointer; width:26px; text-align:center; padding-left:0px; padding-right:0px;}
+
+fieldset {margin:10px 20px 10px 20px; padding:8px; border:1px dotted #333; background:#cccccc;}
+//fieldset div {padding:2px 0px 2px 250px;}
+fieldset div {padding:2px 0px 2px 1px;}
+fieldset div label {margin-left:-230px; padding-top:2px; width:225px; font-weight:bold;	position:absolute;}
+fieldset textarea {width:200px;}
+fieldset span.Form {font-size:14pt;}
+
+fieldset td {text-align:right; font-size:14px; font:bold;}
+fieldset td.lbl {text-align:left; font:bold;}
+
+fieldset a.staticLed {font-size:2.5em; font:bold; text-align:center; padding-left:0px; padding-right:0px;}
+fieldset td.tdLed {text-align:center;}
+fieldset a.setLed {font-size:2.5em; font:bold; text-align:center; padding-left:0px; padding-right:0px; cursor:pointer;}
+fieldset td.numLed {font:bold; text-align:center;}
+
+/* Timeout page */
+fieldset td.tmoutsel {width:150px; margin-left:25px; text-align:center;}
+fieldset td.tmoutsub {padding-left:50px;}
+
+/* PLC page */
+fieldset select.selectring {width:100px;}
+fieldset p.Par {padding:15px 15px 20px 15px;}
+fieldset a.comment {text-align:justify;}
+
+/* TCP/IP page */
+fieldset input.styleChkBox {width:16px; text-align:center; padding-left:0px; padding-right:0px;}
+fieldset input.txtStr {width:250px;}
+fieldset input.s1 {width:256px;}
+fieldset input.saving {width:220px;}
+
+/* RTC page & Ping */
+.txtStr input{width:250px;}
+.s2 input{width:100px; text-align:center;}
+.dateinsert input{width:30px; text-align:center;}
+
+/* Boot page */
+fieldset div.boot {padding:2px 0px 2px 135px;}
+
+.error {margin-left:10px; padding:10px; background:#FF8000; border-left:2px solid #900;}
+
+/*Failed connection for Index page */
+#loading {color:#FF0000; font-weight:bold;}
+
+/*Failed connection for Board Config page*/
+#loading_board {color:#FF0000; font-weight:bold; padding-left:35px;}
+
+
+p.labelDev{
+	float:left;
+	margin: 2px;
+}
+
+.led {	
+    font-size: 4.5em;
+    font: bold;
+    text-align: center;
+    padding-left: 0px;
+    padding-right: 0px;
+    cursor: pointer;
+    border-collapse: separate;
+    //border-spacing: 2px;
+}
+
+.ledDiv {
+    max-width: 40px;
+    text-align: center;
+}
+
+.flex-container {
+  display: flex;
+  flex-wrap: nowrap;
+  //background-color: DodgerBlue;
+  background-color: #cccccc;
+}
+
+.flex-container > div {
+  background-color: #cccccc;
+  //background-color: #f1f1f1;
+  //width: 32px;
+  flex-grow: 1;
+  margin: 2px;
+  text-align: center;
+  line-height: 20px;
+  font-size: 10px;
+}
+
+#buttonsDiv, #buttonsLeftDiv {
+	margin-top: 10px;
+	margin-bottom: 10px;	
+}
+
+#buttonsLeftDiv > button, #buttonsDiv > button {
+	margin-right: 5px;
+}
+

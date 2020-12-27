@@ -1,0 +1,18 @@
+{
+	"networkmode":	0,
+	"ethdhcp":	false,
+	"ethip":	"192.168.99.48",
+	"ethnetmask":	"255.255.255.0",
+	"ethgateway":	"192.168.99.98",
+	"wifi_ssid":	"Alana",
+	"wifi_pass":	"zxcv1234",
+	"wifidhcp":	true,
+	"wifiip":	"192.168.99.46",
+	"wifinetmask":	"255.255.255.0",
+	"wifigateway":	"192.168.99.98",
+	"dns":	"192.168.99.98",
+	"hostname":	"Device-01",
+	"ntpserver":	"pool.ntp.org",
+	"ntpTZ":	"UTC-6:00",
+	"otaURL":	"https://192.168.99.6:8443/MainControllerNew.bin"
+}

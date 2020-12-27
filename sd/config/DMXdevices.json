@@ -1,0 +1,28 @@
+[{
+		"model":	"RGBWStrip",
+		"name":	"подсветка",
+		"description":	"подсветка 123",
+		"room":	"зал",
+		"id":	"rgbw-1",
+		"slaveid":	1,
+		"outputid":	5,
+		"address":	{
+			"r":	1,
+			"g":	2,
+			"b":	3,
+			"w":	4
+		},
+		"HSV":	{
+			"h":	177,
+			"s":	96,
+			"v":	100
+		},
+		"RGB":	{
+			"r":	0,
+			"g":	0,
+			"b":	0
+		},
+		"curMode":	"TEMP",
+		"brightness":	10,
+		"temperature":	4500
+	}]

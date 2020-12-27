@@ -52,6 +52,7 @@ static void eth_event_handler(void *arg, esp_event_base_t event_base,
             ethOK = false;
             break;
         default:
+            ESP_LOGW(TAG, "Unknown event_id %d from ethernet", event_id);
             break;
     }
 }
@@ -81,7 +82,7 @@ bool isWifiEnabled() {
            getNetworkConfigValueInt("networkmode") == 2;
 }
 
-void initEth() {
+esp_err_t initEth() {
     // Initialize TCP/IP network interface (should be called only once in application)
     // ESP_ERROR_CHECK(esp_netif_init());
     // Create default event loop that running in background
@@ -89,7 +90,7 @@ void initEth() {
     static bool inited = false;
     static esp_netif_t *eth_netif;
     if (!inited) {
-        inited = true;
+        inited = true;        
         esp_netif_config_t cfg = ESP_NETIF_DEFAULT_ETH();
         eth_netif = esp_netif_new(&cfg);
         // Set default handlers to process TCP/IP stuffs
@@ -102,18 +103,23 @@ void initEth() {
         eth_phy_config_t phy_config = ETH_PHY_DEFAULT_CONFIG();
         phy_config.phy_addr = 1;
         phy_config.reset_gpio_num = -1;//CONFIG_EXAMPLE_ETH_PHY_RST_GPIO;
+        phy_config.reset_timeout_ms = 500;
         mac_config.smi_mdc_gpio_num = 23; //CONFIG_EXAMPLE_ETH_MDC_GPIO;
         mac_config.smi_mdio_gpio_num = 18; //CONFIG_EXAMPLE_ETH_MDIO_GPIO;
         esp_eth_mac_t *mac = esp_eth_mac_new_esp32(&mac_config);
         esp_eth_phy_t *phy = esp_eth_phy_new_lan8720(&phy_config);
         esp_eth_config_t config = ETH_DEFAULT_CONFIG(mac, phy);
         //esp_eth_handle_t eth_handle = NULL;            
-        ESP_ERROR_CHECK(esp_eth_driver_install(&config, &eth_handle));
+        //ESP_ERROR_CHECK(esp_eth_driver_install(&config, &eth_handle));
+        if (esp_eth_driver_install(&config, &eth_handle) != ESP_OK)
+            return ESP_FAIL;
             /* attach Ethernet driver to TCP/IP stack */
-        ESP_ERROR_CHECK(esp_netif_attach(eth_netif, esp_eth_new_netif_glue(eth_handle)));
-        
+        //ESP_ERROR_CHECK(esp_netif_attach(eth_netif, esp_eth_new_netif_glue(eth_handle)));
+        if (esp_netif_attach(eth_netif, esp_eth_new_netif_glue(eth_handle)) != ESP_OK) 
+            return ESP_FAIL;        
     } else {
-        ESP_ERROR_CHECK(esp_eth_stop(eth_handle));
+        if (esp_eth_stop(eth_handle) != ESP_OK)
+            return ESP_FAIL;
     }
 
     if (!getNetworkConfigValueBool("ethdhcp")) {
@@ -141,7 +147,8 @@ void initEth() {
         esp_netif_set_dns_info(eth_netif, ESP_NETIF_DNS_MAIN, &dns);
     }
     ESP_LOGI(TAG, "Starting eth");
-    ESP_ERROR_CHECK(esp_eth_start(eth_handle));
+    //ESP_ERROR_CHECK(esp_eth_start(eth_handle));
+    return esp_eth_start(eth_handle);
 }
 
 static void sta_event_handler(void* arg, esp_event_base_t event_base,
@@ -334,15 +341,18 @@ void restartTask(void *pvParameter) {
 void wdtEthTask(void *pvParameter) {
     const uint8_t delayTime = 7;
     uint8_t delay = 0;
-    uint8_t retries = 5;
+    uint8_t retries = 10;
     while(1)
     {        
         if (delay++ > delayTime && !ethOK) {            
             ESP_LOGE(TAG, "Ethernet not up in %d seconds. Restarting...", delayTime);
             //writeLog("E", "Ethernet watchdog triggered. Restarting eth...");
-            initEth();
+            if (initEth() != ESP_OK) {
+                ESP_LOGE(TAG, "Can't init Ethernet");
+                vTaskDelete(NULL);
+            }
             delay = 0;
-            if (--retries == 0) {
+            if (!isWifi && --retries == 0) {
                 ESP_LOGW(TAG, "Ethernet not up. Starting AP");
                 wifi_init_softap();
                 xTaskCreate(&restartTask, "restartTask", 4096, NULL, 5, NULL);
@@ -361,6 +371,7 @@ esp_err_t initNetwork() {
     //ESP_LOGI(TAG, "After init net and loop event. Free heap size is %d", esp_get_free_heap_size());
 
     if (isEthEnabled()) {
+        //phyPower(false);
         initEth();    
         xTaskCreate(&wdtEthTask, "wdtEthTask", 4096, NULL, 5, NULL );  
         ESP_LOGI(TAG, "After init eth. Free heap size is %d", esp_get_free_heap_size());

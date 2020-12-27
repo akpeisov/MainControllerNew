@@ -23,3 +23,4 @@ void pollingNew();
 
 SemaphoreHandle_t getSemaphore();
 void createSemaphore();
+void phyPower(bool on_off);

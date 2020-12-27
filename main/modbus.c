@@ -375,7 +375,7 @@ esp_err_t executeModbusCommand(uint8_t slaveId, uint8_t command, uint8_t start, 
     request->reg_start = start;
     request->reg_size = qty;    
     if (my_master_send_request(request) != ESP_OK) {
-        free(*response);
+        //free(*response);
         free(request);
         return ESP_FAIL;
     }
