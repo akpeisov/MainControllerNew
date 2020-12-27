@@ -12,12 +12,9 @@
 #include "network.h"
 #include "webServer.h"
 #include "modbus.h"
-<<<<<<< Updated upstream
-=======
 #include "ftp.h"
 #include "dmx.h"
 #include "mqtt.h"
->>>>>>> Stashed changes
 
 static const char *TAG = "MAIN";
 
@@ -56,14 +53,12 @@ void modBusTask(void *pvParameter) {
     uint16_t pollingTime;
     ESP_LOGI(TAG, "Creating modBus task");
     SemaphoreHandle_t sem = getSemaphore();
-    while(1)
-    {     
+    while(1) {     
         pollingTime = getServiceConfigValueInt("pollingTime");                         
         if (pollingTime == 0) {
             break;
         }
-        if (xSemaphoreTake(sem, portMAX_DELAY) == pdTRUE)
-        {
+        if (xSemaphoreTake(sem, portMAX_DELAY) == pdTRUE) {
             //ESP_LOGI(TAG, "modBus task semaphore working");
             // Здесь происходит защищенный доступ к ресурсу.               
             pollingNew();
@@ -82,7 +77,12 @@ void app_main(void)
 {
     initLED();
     changeLEDStatus(LED_BOOTING);
-    initStorage();
+    if (initStorage() != ESP_OK) {
+        // alert!!!        
+        changeLEDStatus(LED_ERROR);
+        return;
+    }
+    
     loadConfig();
     if (initNetwork() == ESP_OK) {
         initWebServer();
@@ -96,12 +96,9 @@ void app_main(void)
 
     changeLEDStatus(LED_NORMAL);
     writeLog("I", "System started");
-<<<<<<< Updated upstream
-=======
 
     initMQTT();
     initFTP();
     DMXInit();
 
->>>>>>> Stashed changes
 }

@@ -23,15 +23,6 @@ static const char* TAG = "MODBUS";
 static uint8_t queueWriteIndex;
 uint16_t readTimeOut = 20;
 
-typedef enum {
-    MB_OK = 0,
-    MB_SEND_FAILED,
-    MB_RECEIVE_ERROR,
-    MB_RECEIVE_TIMEOUT,
-    MB_CHECKSUM_ERROR,
-    MB_ERROR_CODE
-} send_packet_res_t;
-
 typedef struct {
     uint8_t slave_addr;             /*!< Modbus slave address */
     uint8_t command;                /*!< Modbus command to send */
@@ -120,7 +111,7 @@ esp_err_t mbInit() {
     };
     
     // Set UART log level
-    ESP_LOGI(TAG, "Starting RS485");
+    ESP_LOGI(TAG, "Starting RS485 ModBus");
     // Install UART driver (we don't need an event queue here)
     // In this example we don't even use a buffer for sending data.
     ESP_ERROR_CHECK(uart_driver_install(uart_num, BUF_SIZE * 2, BUF_SIZE * 2, 0, NULL, 0));
@@ -161,25 +152,25 @@ bool checkCRC(uint8_t *data, uint8_t len) {
     return (data[len-2] == (uint8_t)crc && data[len-1] == (uint8_t)(crc>>8));
 }
 
-char* getMBError(uint8_t err) {
-    switch (err) {
-        case MB_OK:
-            return "OK";
-        case MB_SEND_FAILED:
-            return "Send failed";
-        case MB_RECEIVE_ERROR:
-            return "Receive error";
-        case MB_RECEIVE_TIMEOUT:
-            return "Receive timeout";
-        case MB_CHECKSUM_ERROR:
-            return "Checksum error";
-        case MB_ERROR_CODE:
-            return "Modbus internal error";
-    }
-    return "unknown";
-}
+// char* getMBError(uint8_t err) {
+//     switch (err) {
+//         case MB_OK:
+//             return "OK";
+//         case MB_SEND_FAILED:
+//             return "Send failed";
+//         case MB_RECEIVE_ERROR:
+//             return "Receive error";
+//         case MB_RECEIVE_TIMEOUT:
+//             return "Receive timeout";
+//         case MB_CHECKSUM_ERROR:
+//             return "Checksum error";
+//         case MB_ERROR_CODE:
+//             return "Modbus internal error";
+//     }
+//     return "unknown";
+// }
 
-send_packet_res_t sendPacket(uint8_t *txData, uint8_t txLen_, uint8_t **rxData, uint8_t *rxLen) {
+esp_err_t sendPacket(uint8_t *txData, uint8_t txLen_, uint8_t **rxData, uint8_t *rxLen) {
     // send data    
     // add crc
     uint8_t txLen = txLen_;    
@@ -190,7 +181,7 @@ send_packet_res_t sendPacket(uint8_t *txData, uint8_t txLen_, uint8_t **rxData, 
     // ESP_LOG_BUFFER_HEXDUMP("txData", txData, txLen, CONFIG_LOG_DEFAULT_LEVEL);
     
     if (uart_write_bytes(MB_PORT_NUM, (char*)txData, txLen) != txLen) {
-        return MB_SEND_FAILED;
+        return ESP_ERR_INVALID_SIZE;
     }
     // receive data        
     *rxData = (uint8_t*) malloc(BUF_SIZE); 
@@ -199,16 +190,16 @@ send_packet_res_t sendPacket(uint8_t *txData, uint8_t txLen_, uint8_t **rxData, 
 
     // check crc
     if (*rxLen == 0) {
-        return MB_RECEIVE_TIMEOUT;
+        return ESP_ERR_TIMEOUT;
     }
     if (*rxLen < 4) {
-        return MB_RECEIVE_ERROR;
+        return ESP_ERR_INVALID_RESPONSE;
     }
     if (!checkCRC(*rxData, *rxLen)) {    
-        return MB_CHECKSUM_ERROR;    
+        return ESP_ERR_INVALID_CRC;    
     }
     *rxLen=*rxLen-2;
-    return MB_OK;
+    return ESP_OK;
 }
 
 esp_err_t my_master_send_request(mb_param_t* request) {    
@@ -234,7 +225,7 @@ esp_err_t my_master_send_request(mb_param_t* request) {
             break;          
     }
     if (txLen == 0) {
-        return ESP_FAIL;
+        return ESP_ERR_NOT_SUPPORTED;
     }
 
     uint8_t *txData = (uint8_t*)malloc(txLen+2); //+2 for CRC
@@ -264,27 +255,26 @@ esp_err_t my_master_send_request(mb_param_t* request) {
     } else if (request->command == MB_WRITE_MULTI_COILS) {
         // not inmplemented yet                
         free(txData);        
-        return ESP_FAIL;
+        return ESP_ERR_NOT_SUPPORTED;
     }
         
-    uint8_t *rxData;
+    uint8_t *rxData = NULL;
     heap_caps_check_integrity_all(true);  
     
     uint8_t rxLen = 0;
-    send_packet_res_t err = sendPacket(txData, txLen, &rxData, &rxLen);
-    
-    if (err == MB_OK) {
+    esp_err_t err = sendPacket(txData, txLen, &rxData, &rxLen);     
+    if (err == ESP_OK) {
         // everything is ok, return values    
         // check for error
         if (rxData[1] >= 0x80) {
             ESP_LOGE(TAG, "Received error #%d", rxData[2]);
-            err = MB_ERROR_CODE;
+            err = ESP_ERR_INVALID_STATE;
         }
         uint8_t dataLen = rxData[2]; // in bytes
         if (dataLen > rxLen-3) { // address, command, length, crc
             ESP_LOGE(TAG, "Data length mismatch long! DataLen %d rxLen %d", dataLen, rxLen);
             ESP_LOG_BUFFER_HEXDUMP("rxData", rxData, rxLen, CONFIG_LOG_DEFAULT_LEVEL);
-            err = MB_RECEIVE_ERROR;
+            err = ESP_ERR_INVALID_RESPONSE;
         } else {
             if ((request->command == MB_READ_COILS) || 
                 (request->command == MB_READ_INPUTS) ||
@@ -301,13 +291,13 @@ esp_err_t my_master_send_request(mb_param_t* request) {
             }
             // other commands for set data            
         }        
-    } else if (err == MB_SEND_FAILED) {        
+    } else if (err == ESP_ERR_INVALID_SIZE) {        
         ESP_LOGE(TAG, "Error while sending request");                
+        ESP_LOG_BUFFER_HEXDUMP("txData", txData, txLen, CONFIG_LOG_DEFAULT_LEVEL);        
+    } else if (err != ESP_OK) {
+        //ESP_LOGE(TAG, "Error while getting response. Errcode %d, %s. txLen %d", err, getMBError(err), txLen);        
         ESP_LOG_BUFFER_HEXDUMP("txData", txData, txLen, CONFIG_LOG_DEFAULT_LEVEL);
-    } else if (err != MB_OK) {
-        ESP_LOGE(TAG, "Error while getting response. Errcode %d, %s. txLen %d", err, getMBError(err), txLen);        
-        ESP_LOG_BUFFER_HEXDUMP("txData", txData, txLen, CONFIG_LOG_DEFAULT_LEVEL);
-        ESP_LOG_BUFFER_HEXDUMP("rxData", rxData, rxLen, CONFIG_LOG_DEFAULT_LEVEL);
+        ESP_LOG_BUFFER_HEXDUMP("rxData", rxData, rxLen, CONFIG_LOG_DEFAULT_LEVEL);        
     }
     heap_caps_check_integrity_all(true);       
     if (txData != NULL)
@@ -315,9 +305,7 @@ esp_err_t my_master_send_request(mb_param_t* request) {
     if (rxData != NULL)
         free(rxData);
 
-    if (err != MB_OK)
-        return ESP_FAIL;
-    return ESP_OK;   
+    return err;      
 }
 
 bool getQueue(mb_param_t** param, uint8_t *indx) { 
@@ -358,7 +346,7 @@ void processQueue() {
     }
 }
 
-esp_err_t executeModbusCommand(uint8_t slaveId, uint8_t command, uint8_t start, uint8_t qty, uint8_t **response) {
+esp_err_t executeModbusCommand(uint8_t slaveId, uint8_t command, uint16_t start, uint8_t qty, uint8_t **response) {
     // выполнить модбас команду, вернется или хорошо или плохо, код ошибки в параметре
     mb_param_t *request = malloc(sizeof(mb_param_t));
     if (request == NULL) {

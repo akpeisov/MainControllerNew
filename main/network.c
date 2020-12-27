@@ -23,6 +23,12 @@ bool ethOK = false;
 bool isWifi = false, isEth = false;
 static EventGroupHandle_t s_wifi_event_group;
 static int s_retry_num = 0;
+//uint8_t ownAddr[4];
+uint32_t ownAddr;
+
+uint32_t getOwnAddr() {
+    return ownAddr;
+}
 
 /** Event handler for Ethernet events */
 static void eth_event_handler(void *arg, esp_event_base_t event_base,
@@ -70,6 +76,9 @@ static void got_ip_event_handler(void *arg, esp_event_base_t event_base,
     ESP_LOGI(TAG, "ETHMASK:" IPSTR, IP2STR(&ip_info->netmask));
     ESP_LOGI(TAG, "ETHGW:" IPSTR, IP2STR(&ip_info->gw));
     ESP_LOGI(TAG, "~~~~~~~~~~~");
+    ownAddr = ip_info->ip.addr;    
+    // ESP_LOGI(TAG, "address %zu, 0x%08x", ownAddr, ownAddr);
+    // ESP_LOGW(TAG, "a1 %d, %d, %d, %d", (ownAddr>>24)&0xFF, (ownAddr>>16)&0xFF, (ownAddr>>8)&0xFF, (ownAddr)&0xFF );
     isEth = true;
 }
 
@@ -185,6 +194,7 @@ static void wifi_got_ip_event_handler(void *arg, esp_event_base_t event_base,
     ESP_LOGI(TAG, "WIFI MASK:" IPSTR, IP2STR(&ip_info->netmask));
     ESP_LOGI(TAG, "WIFI GW:" IPSTR, IP2STR(&ip_info->gw));
     ESP_LOGI(TAG, "~~~~~~~~~~~");
+    ownAddr = ip_info->ip.addr;    
     isWifi = true;
 }
 
@@ -292,8 +302,8 @@ static void obtain_time(void) {
     // wait for time to be set
     time_t now = 0;
     struct tm timeinfo = { 0 };
-    int retry = 0;
-    const int retry_count = 10;
+    //int retry = 0;
+    //const int retry_count = 10;
     // while (sntp_get_sync_status() == SNTP_SYNC_STATUS_RESET && ++retry < retry_count) {
     //     ESP_LOGI(TAG, "Waiting for system time to be set... (%d/%d)", retry, retry_count);
     //     vTaskDelay(2000 / portTICK_PERIOD_MS);

@@ -254,6 +254,6 @@ char* getWWWroot() {
 
 esp_err_t initWebServer() {
     wwwroot = calloc(1, 30);
-    strcpy(wwwroot, "/storage/webUI/new");
+    strcpy(wwwroot, "/storage/web");
     return startWebserver();
 }

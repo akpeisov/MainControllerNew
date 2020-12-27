@@ -1,0 +1,213 @@
+// RGB device
+
+DMX channels
+
+{
+    "model": "RGBWStrip",
+    "name": "подсветка",    
+    "room": "зал",
+    "id": "rgbw-1",
+    "slaveid" : 1,
+    "outputid": 5,
+    "address": {
+        "r": 1,
+        "g": 2,
+        "b": 3,
+        "w": 4
+    },
+    "HSV": {
+        "h": 346,
+        "s": 100,
+        "v": 50
+    },
+    "RGB": {
+        "r": 255,
+        "g": 100,
+        "b": 50
+    },
+    "white": 100,
+    "brightness": 40,
+    "temperature": 2700,
+    "curMode": "HSV"  
+}
+
+
+
+{
+    Огненный белый  1500    Нет
+Мягкий белый    2700    Нет
+Теплый белый    3400    Нет
+Белый           4500    Является значением по умолчанию
+Дневной белый   5600    Нет
+Холодный белый  6500    Нет
+Туманный белый  7500    Нет
+Небесный белый  9000    Нет
+    "temperatures":[
+        {"temp": 2700,
+         "values": {"r": 0, "g": 0, "b": 0, "w": 0}
+        },
+        {"temp": 3400,
+         "values": {"r": 200, "g": 100, "b": 200, "w": 100}
+        }
+        ]
+}
+
+// for PWM light controller
+{
+    "model": "PWM4",
+    "slaveid": 5,    
+    "values": {
+        "0": 1023,
+        "1": 200,
+        "2": 30,
+        "3": 0    
+    }
+}
+
+// dmx process
+
+// devices
+{
+    "payload": {
+        "user_id": "esp",
+        "devices": [
+            {
+                "id": "lamp-001-xdl",
+                "name": "Подсветка",
+                "description": "Подсветка rgbww",
+                "room": "Зал",
+                "type": "devices.types.light",
+                "custom_data": {
+                    "slaveid": 3,
+                    "output": 0
+                },
+                "capabilities": [
+                    {
+                        "type": "devices.capabilities.color_setting",
+                        "retrievable": true,
+                        "parameters": {
+                            "color_model": "hsv",
+                            "temperature_k": {
+                                "max": 6500,
+                                "min": 2700
+                            }
+                        }
+                       
+                    },
+                    {
+                        "type": "devices.capabilities.range",
+                        "retrievable": true,
+                        "parameters": {
+                            "instance": "brightness",
+                            "random_access": true,
+                            "range": {
+                                "max": 100,
+                                "min": 0,
+                                "precision": 10
+                            },
+                            "unit": "unit.percent"
+                        }
+                    },
+                    {
+                        "type": "devices.capabilities.on_off",
+                        "state": {
+                            "instance": "on",
+                            "value": true
+                        }
+                    }
+                ]
+            }]
+    }
+}
+
+
+/// query  answer
+
+{
+    "request_id": "ff36a3cc-ec34-11e6-b1a0-64510650abcf",
+    "payload": {
+        "devices": [
+            {
+                "id": "lamp-001-xdl",
+                "capabilities": [
+                    {
+                        "type": "devices.capabilities.color_setting",
+                        "state": {
+                            "instance": "hsv",
+                            "value": {
+                                "h": 255,
+                                "s": 100,
+                                "v": 50
+                            }
+                        }
+                    },
+                    {
+                        "type": "devices.capabilities.color_setting",
+                        "state": {
+                            "instance": "temperature_k",
+                            "value": 4500
+                        }
+                    }
+                ]
+            },
+            {
+                "id": "lamp-003-xdl",
+                "capabilities": [
+                    {
+                        "type": "devices.capabilities.color_setting",
+                        "state": {
+                            "instance": "temperature_k",
+                            "value": 4500
+                        }
+                    }
+                ]
+            }
+        ]
+    }
+}
+
+
+// action answer
+
+{
+  "request_id": "ff36a3cc-ec34-11e6-b1a0-64510650abcf",
+  "payload": {
+    "devices": [{
+        "id": "lamp-001-xdl",
+        "capabilities": [{
+          "type": "devices.capabilities.color_setting",
+          "state": {
+            "instance": "hsv",
+            "action_result": {
+              "status": "DONE"
+            }
+          }
+        }]
+      },
+      {
+        "id": "lamp-003-xdl",
+        "capabilities": [{
+          "type": "devices.capabilities.color_setting",
+          "state": {
+            "instance": "temperature_k",
+            "action_result": {
+              "status": "DONE"
+            }
+          }
+        }]
+      }
+    ]
+  }
+}     
+
+// hz
+
+
+         "state": {
+                            "instance": "hsv",
+                            "value": {
+                                "h": 255,
+                                "s": 100,
+                                "v": 50
+                            }
+                        }
