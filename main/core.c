@@ -44,24 +44,11 @@ static cJSON *temperaturesData;
 
 uint8_t ledStatus = LED_BOOTING;
 
-typedef enum {
-    ACT_NOTHING, // nothing 
-    ACT_ON,      // switch on 
-    ACT_OFF,     // switch off
-    ACT_TOGGLE   // toggle     
-} action_type_t;
-
 typedef struct {
-    uint8_t slave_addr; // на каком устройстве произошло событие
-    uint8_t input;      // на каком входе         
-    uint8_t event;      // какое событие event_type_t
+    uint8_t slave_addr; // РЅР° РєР°РєРѕРј СѓСЃС‚СЂРѕР№СЃС‚РІРµ РїСЂРѕРёР·РѕС€Р»Рѕ СЃРѕР±С‹С‚РёРµ
+    uint8_t input;      // РЅР° РєР°РєРѕРј РІС…РѕРґРµ         
+    uint8_t event;      // РєР°РєРѕРµ СЃРѕР±С‹С‚РёРµ event_type_t
 } event_t;
-
-typedef struct {
-    uint8_t slave_addr; // адрес устройства назначения
-    uint8_t output;     // номер выхода           
-    uint8_t action;     // действие action_type_t
-} action_t;
 
 typedef enum {
     EV_NOTHING, // nothing happends
@@ -312,7 +299,7 @@ bool isReboot() {
 }
 
 // void setErrorText(char **response, const char *text) {
-//     // если надо аллокейтить внутри функции, то надо на вход передать адрес &dst, а внутри через *работать, в хидере **
+//     // РµСЃР»Рё РЅР°РґРѕ Р°Р»Р»РѕРєРµР№С‚РёС‚СЊ РІРЅСѓС‚СЂРё С„СѓРЅРєС†РёРё, С‚Рѕ РЅР°РґРѕ РЅР° РІС…РѕРґ РїРµСЂРµРґР°С‚СЊ Р°РґСЂРµСЃ &dst, Р° РІРЅСѓС‚СЂРё С‡РµСЂРµР· *СЂР°Р±РѕС‚Р°С‚СЊ, РІ С…РёРґРµСЂРµ **
 //     *response = (char*)malloc(strlen(text)+1);
 //     strcpy(*response, text);    
 //     ESP_LOGE(TAG, "%s", text);
@@ -486,7 +473,7 @@ esp_err_t getDevicesAlice(char **response, char* requestId) {
             cJSON_AddItemToObject(cdata, "output", cJSON_CreateNumber(cJSON_GetObjectItem(childDevice, "outputid")->valueint));
             cJSON_AddItemToObject(dev, "custom_data", cdata);
             cJSON *capabilities = cJSON_CreateArray();
-            // пока константой для всех
+            // РїРѕРєР° РєРѕРЅСЃС‚Р°РЅС‚РѕР№ РґР»СЏ РІСЃРµС…
             cJSON *capability = cJSON_CreateObject();
             cJSON_AddItemToObject(capability, "type", cJSON_CreateString("devices.capabilities.on_off"));
             cJSON_AddItemToArray(capabilities, capability); 
@@ -535,7 +522,7 @@ esp_err_t getDevicesAlice(char **response, char* requestId) {
     return ESP_OK;
 }
 
-// Получение данных устройства по slaveid
+// РџРѕР»СѓС‡РµРЅРёРµ РґР°РЅРЅС‹С… СѓСЃС‚СЂРѕР№СЃС‚РІР° РїРѕ slaveid
 // /device?slaveid=1 
 esp_err_t getDevice(char **response, uint8_t slaveId) {
     //ESP_LOGI(TAG, "getDevice");
@@ -570,7 +557,7 @@ esp_err_t getDevice(char **response, uint8_t slaveId) {
 }
 
 uint8_t findDeviceIndex(uint8_t slaveId) {
-    // функция находит индекс устройства для последующего удаления или просто для определения его наличия
+    // С„СѓРЅРєС†РёСЏ РЅР°С…РѕРґРёС‚ РёРЅРґРµРєСЃ СѓСЃС‚СЂРѕР№СЃС‚РІР° РґР»СЏ РїРѕСЃР»РµРґСѓСЋС‰РµРіРѕ СѓРґР°Р»РµРЅРёСЏ РёР»Рё РїСЂРѕСЃС‚Рѕ РґР»СЏ РѕРїСЂРµРґРµР»РµРЅРёСЏ РµРіРѕ РЅР°Р»РёС‡РёСЏ
     uint8_t idx = 0;
     bool found = false;
     cJSON *childDevice = devices->child;        
@@ -589,11 +576,11 @@ uint8_t findDeviceIndex(uint8_t slaveId) {
     return idx;
 }
 
-// Обновление данных устройства по slaveid
+// РћР±РЅРѕРІР»РµРЅРёРµ РґР°РЅРЅС‹С… СѓСЃС‚СЂРѕР№СЃС‚РІР° РїРѕ slaveid
 // /device?slaveid=1 
 esp_err_t setDevice(char **response, uint8_t slaveId, char *content) {    
     // if slaveid = 0 - new device    
-    // content при редактировании приходит весь, т.е. устройство со всеми дочерними объектами, поэтому можно смело удалять и писать заново
+    // content РїСЂРё СЂРµРґР°РєС‚РёСЂРѕРІР°РЅРёРё РїСЂРёС…РѕРґРёС‚ РІРµСЃСЊ, С‚.Рµ. СѓСЃС‚СЂРѕР№СЃС‚РІРѕ СЃРѕ РІСЃРµРјРё РґРѕС‡РµСЂРЅРёРјРё РѕР±СЉРµРєС‚Р°РјРё, РїРѕСЌС‚РѕРјСѓ РјРѕР¶РЅРѕ СЃРјРµР»Рѕ СѓРґР°Р»СЏС‚СЊ Рё РїРёСЃР°С‚СЊ Р·Р°РЅРѕРІРѕ
     ESP_LOGI(TAG, "setDevice. slaveId %d", slaveId);
     //ESP_LOGI(TAG, "content %s", content);
 
@@ -610,12 +597,12 @@ esp_err_t setDevice(char **response, uint8_t slaveId, char *content) {
     }
     // name and description are optional fields
 
-    // если slaveId = 0 - то это добавление нового устройства, а если не 0, значит обновление старого
-    // нельзя добавить два устройства с одним slaveid
-    // соответственно, нельзя обновить slaveid существующее устройства на неуникальный
+    // РµСЃР»Рё slaveId = 0 - С‚Рѕ СЌС‚Рѕ РґРѕР±Р°РІР»РµРЅРёРµ РЅРѕРІРѕРіРѕ СѓСЃС‚СЂРѕР№СЃС‚РІР°, Р° РµСЃР»Рё РЅРµ 0, Р·РЅР°С‡РёС‚ РѕР±РЅРѕРІР»РµРЅРёРµ СЃС‚Р°СЂРѕРіРѕ
+    // РЅРµР»СЊР·СЏ РґРѕР±Р°РІРёС‚СЊ РґРІР° СѓСЃС‚СЂРѕР№СЃС‚РІР° СЃ РѕРґРЅРёРј slaveid
+    // СЃРѕРѕС‚РІРµС‚СЃС‚РІРµРЅРЅРѕ, РЅРµР»СЊР·СЏ РѕР±РЅРѕРІРёС‚СЊ slaveid СЃСѓС‰РµСЃС‚РІСѓСЋС‰РµРµ СѓСЃС‚СЂРѕР№СЃС‚РІР° РЅР° РЅРµСѓРЅРёРєР°Р»СЊРЅС‹Р№
     uint8_t newSlaveId = cJSON_GetObjectItem(data, "slaveid")->valueint;
     if (newSlaveId != slaveId) {
-        // обновление slaveId, надо проверить на дубликат
+        // РѕР±РЅРѕРІР»РµРЅРёРµ slaveId, РЅР°РґРѕ РїСЂРѕРІРµСЂРёС‚СЊ РЅР° РґСѓР±Р»РёРєР°С‚
         if (findDeviceIndex(newSlaveId) > 0) {
             ESP_LOGI(TAG, "Device with slaveid %d already exists.", newSlaveId);
             setErrorText(response, "Device with slaveid already exists");
@@ -688,7 +675,7 @@ esp_err_t getDMXDevices(char **response) {
 }
 
 esp_err_t setDMXDevices(char **response, char *content) {        
-    // тупо обновит весь массив устройств
+    // С‚СѓРїРѕ РѕР±РЅРѕРІРёС‚ РІРµСЃСЊ РјР°СЃСЃРёРІ СѓСЃС‚СЂРѕР№СЃС‚РІ
     ESP_LOGI(TAG, "setDMXDevices");
 
     //new data
@@ -698,7 +685,7 @@ esp_err_t setDMXDevices(char **response, char *content) {
         return ESP_FAIL;
     }
     
-    // TODO : добавить валидацию payload
+    // TODO : РґРѕР±Р°РІРёС‚СЊ РІР°Р»РёРґР°С†РёСЋ payload
     if (cJSON_IsObject(DMXdevices)) {
         cJSON_Delete(DMXdevices);
     }
@@ -721,7 +708,7 @@ esp_err_t getTemperatures(char **response) {
 }
 
 esp_err_t setTemperatures(char **response, char *content) {        
-    // тупо обновит весь массив 
+    // С‚СѓРїРѕ РѕР±РЅРѕРІРёС‚ РІРµСЃСЊ РјР°СЃСЃРёРІ 
     ESP_LOGI(TAG, "setTemperatures");
 
     //new data
@@ -731,7 +718,7 @@ esp_err_t setTemperatures(char **response, char *content) {
         return ESP_FAIL;
     }
     
-    // TODO : добавить валидацию payload
+    // TODO : РґРѕР±Р°РІРёС‚СЊ РІР°Р»РёРґР°С†РёСЋ payload
     if (cJSON_IsObject(temperaturesData)) {
         cJSON_Delete(temperaturesData);
     }
@@ -769,14 +756,14 @@ void getTempColors(uint16_t temp, uint8_t *r, uint8_t *g, uint8_t *b, uint8_t *w
 }
 
 void processDMXDevices() {
-    // выставить значения ДМХ согласно имеющимся данным
+    // РІС‹СЃС‚Р°РІРёС‚СЊ Р·РЅР°С‡РµРЅРёСЏ Р”РњРҐ СЃРѕРіР»Р°СЃРЅРѕ РёРјРµСЋС‰РёРјСЃСЏ РґР°РЅРЅС‹Рј
     uint8_t r=0,g=0,b=0,s=0,v=0,w=0;
     uint16_t h,temp=2700;    
     uint16_t ra=0,ga=0,ba=0,wa=0;
     cJSON *childDevice = DMXdevices->child;        
     while (childDevice) {
         if (cJSON_IsString(cJSON_GetObjectItem(childDevice, "curMode"))) {
-            // проще всего управлять яркостью через модель HSV
+            // РїСЂРѕС‰Рµ РІСЃРµРіРѕ СѓРїСЂР°РІР»СЏС‚СЊ СЏСЂРєРѕСЃС‚СЊСЋ С‡РµСЂРµР· РјРѕРґРµР»СЊ HSV
             // get brightness
             uint8_t brightness = 0xFF;
             if (cJSON_IsNumber(cJSON_GetObjectItem(childDevice, "brightness"))) {
@@ -815,10 +802,10 @@ void processDMXDevices() {
                 // get table values
                 getTempColors(temp, &r, &g, &b, &w);
                 //ESP_LOGI(TAG, "temp %d, r %d, g %d, b %d, w %d", temp, &r, &g, &b, &w)
-                // как менять яркость?
-                // 1 вариант - конвертировать в HSV, а канал белого пропорционально уменьшить
+                // РєР°Рє РјРµРЅСЏС‚СЊ СЏСЂРєРѕСЃС‚СЊ?
+                // 1 РІР°СЂРёР°РЅС‚ - РєРѕРЅРІРµСЂС‚РёСЂРѕРІР°С‚СЊ РІ HSV, Р° РєР°РЅР°Р» Р±РµР»РѕРіРѕ РїСЂРѕРїРѕСЂС†РёРѕРЅР°Р»СЊРЅРѕ СѓРјРµРЅСЊС€РёС‚СЊ
                 rgb2hsv(r, g, b, &h, &s, &v);
-                // вариант 2. принимать значения как РГБ и потом каким-то образом применять яркость, тогда не будет двойного преобразования
+                // РІР°СЂРёР°РЅС‚ 2. РїСЂРёРЅРёРјР°С‚СЊ Р·РЅР°С‡РµРЅРёСЏ РєР°Рє Р Р“Р‘ Рё РїРѕС‚РѕРј РєР°РєРёРј-С‚Рѕ РѕР±СЂР°Р·РѕРј РїСЂРёРјРµРЅСЏС‚СЊ СЏСЂРєРѕСЃС‚СЊ, С‚РѕРіРґР° РЅРµ Р±СѓРґРµС‚ РґРІРѕР№РЅРѕРіРѕ РїСЂРµРѕР±СЂР°Р·РѕРІР°РЅРёСЏ
             }
 
             // after correct brightness if it exists
@@ -841,7 +828,7 @@ void processDMXDevices() {
 
 }
 
-// Получение списка выходов со статусом
+// РџРѕР»СѓС‡РµРЅРёРµ СЃРїРёСЃРєР° РІС‹С…РѕРґРѕРІ СЃРѕ СЃС‚Р°С‚СѓСЃРѕРј
 // /outputs?slaveid=2
 esp_err_t getOutputs(char **response, unsigned char slaveId) {
     if (!cJSON_IsObject(devices) && !cJSON_IsArray(devices)) {
@@ -873,11 +860,11 @@ esp_err_t getOutputs(char **response, unsigned char slaveId) {
     return ESP_FAIL;    
 }
 
-// Обновление данных выходов по slaveid для UI!!!
+// РћР±РЅРѕРІР»РµРЅРёРµ РґР°РЅРЅС‹С… РІС‹С…РѕРґРѕРІ РїРѕ slaveid РґР»СЏ UI!!!
 // /device?slaveid=1 
 esp_err_t setOutputs(char **response, unsigned char slaveId, char *content) {   
     // set outputs
-    // можно тупо удалить все выходы устройства и потом по новой записать массив
+    // РјРѕР¶РЅРѕ С‚СѓРїРѕ СѓРґР°Р»РёС‚СЊ РІСЃРµ РІС‹С…РѕРґС‹ СѓСЃС‚СЂРѕР№СЃС‚РІР° Рё РїРѕС‚РѕРј РїРѕ РЅРѕРІРѕР№ Р·Р°РїРёСЃР°С‚СЊ РјР°СЃСЃРёРІ
     ESP_LOGI(TAG, "setOutputs. DeviceId is %d", slaveId);
     ESP_LOGI(TAG, "content %s", content);
     
@@ -930,7 +917,7 @@ esp_err_t setOutputs(char **response, unsigned char slaveId, char *content) {
     return ESP_FAIL;
 }
 
-// Получение списка входов со статусом
+// РџРѕР»СѓС‡РµРЅРёРµ СЃРїРёСЃРєР° РІС…РѕРґРѕРІ СЃРѕ СЃС‚Р°С‚СѓСЃРѕРј
 // /inputs?slaveid=2
 esp_err_t getInputs(char **response, unsigned char slaveId) {
     if (!cJSON_IsObject(devices) && !cJSON_IsArray(devices)) {
@@ -962,11 +949,11 @@ esp_err_t getInputs(char **response, unsigned char slaveId) {
     return ESP_FAIL;        
 }
 
-// Обновление данных входов по slaveid
+// РћР±РЅРѕРІР»РµРЅРёРµ РґР°РЅРЅС‹С… РІС…РѕРґРѕРІ РїРѕ slaveid
 // /device?slaveid=1 
 esp_err_t setInputs(char **response, unsigned char slaveId, char *content) {    
     // set inputs
-    // Обновить данные по существующим входам, остальные удаляются вместе с правилами
+    // РћР±РЅРѕРІРёС‚СЊ РґР°РЅРЅС‹Рµ РїРѕ СЃСѓС‰РµСЃС‚РІСѓСЋС‰РёРј РІС…РѕРґР°Рј, РѕСЃС‚Р°Р»СЊРЅС‹Рµ СѓРґР°Р»СЏСЋС‚СЃСЏ РІРјРµСЃС‚Рµ СЃ РїСЂР°РІРёР»Р°РјРё
     ESP_LOGI(TAG, "setInputs. Device id %d", slaveId);
 
     //new data
@@ -1072,7 +1059,7 @@ esp_err_t setInputs(char **response, unsigned char slaveId, char *content) {
     return getInputs(response, slaveId);     
 }
 
-// Получение списка событий
+// РџРѕР»СѓС‡РµРЅРёРµ СЃРїРёСЃРєР° СЃРѕР±С‹С‚РёР№
 // /events?slaveid=1&inputid=2
 esp_err_t getEvents(char **response, unsigned char slaveId, unsigned char inputId) {
     if (!cJSON_IsObject(devices) && !cJSON_IsArray(devices)) {
@@ -1123,7 +1110,7 @@ esp_err_t getEvents(char **response, unsigned char slaveId, unsigned char inputI
     return ESP_FAIL;
 }
 
-// Обновление данных выходов по slaveid и inputid
+// РћР±РЅРѕРІР»РµРЅРёРµ РґР°РЅРЅС‹С… РІС‹С…РѕРґРѕРІ РїРѕ slaveid Рё inputid
 // /device?slaveid=1&inputid=2 
 esp_err_t setEvents(char **response, unsigned char slaveId, unsigned char inputId, char *content) { 
     // set events
@@ -1228,13 +1215,13 @@ esp_err_t setDevices(char **response, char *content) {
 }
 
 uint8_t getActionValue(char * str) {
-    if (!strcmp(str, "on")) {        
+    if ((!strcmp(str, "on")) || (!strcmp(str, "ON"))) {        
         return ACT_ON;
     }
-    if (!strcmp(str, "off")) {        
+    if ((!strcmp(str, "off")) || (!strcmp(str, "OFF"))){        
         return ACT_OFF;
     }
-    if (!strcmp(str, "toggle")) {        
+    if ((!strcmp(str, "toggle")) || (!strcmp(str, "TOGGLE"))) {        
         return ACT_TOGGLE;
     }
     return ACT_NOTHING;
@@ -1293,13 +1280,13 @@ esp_err_t setDeviceConfig(char **response, uint8_t slaveId) {
             if (cJSON_IsTrue(cJSON_GetObjectItem(childDevice, "inverse"))) {
                 setbit(config, 3);
             }
-            // входы
+            // РІС…РѕРґС‹
             cJSON *inputs = cJSON_GetObjectItem(childDevice, "inputs")->child;
             while (inputs) {
                 inputsQty++;
                 id = cJSON_GetObjectItem(inputs, "id")->valueint;
                 if (id > 15) {
-                    // ерунда какая-то, пропускаем
+                    // РµСЂСѓРЅРґР° РєР°РєР°СЏ-С‚Рѕ, РїСЂРѕРїСѓСЃРєР°РµРј
                     inputs = inputs->next;
                     continue;    
                 }
@@ -1314,7 +1301,7 @@ esp_err_t setDeviceConfig(char **response, uint8_t slaveId) {
                     while (events) {
                         if (cJSON_GetObjectItem(events, "slaveid")->valueint == slaveId) {
                             ESP_LOGI("setConfig", "slaveid %d, input %d event %s", slaveId, id, cJSON_GetObjectItem(events, "event")->valuestring);
-                            // добавить событие только если оно этого же устройства
+                            // РґРѕР±Р°РІРёС‚СЊ СЃРѕР±С‹С‚РёРµ С‚РѕР»СЊРєРѕ РµСЃР»Рё РѕРЅРѕ СЌС‚РѕРіРѕ Р¶Рµ СѓСЃС‚СЂРѕР№СЃС‚РІР°
                             if (!strcmp(cJSON_GetObjectItem(events, "event")->valuestring, "on") || 
                                 !strcmp(cJSON_GetObjectItem(events, "event")->valuestring, "toggle")) {
                                 // first byte
@@ -1335,7 +1322,7 @@ esp_err_t setDeviceConfig(char **response, uint8_t slaveId) {
                 }         
                 inputs = inputs->next;
             }
-            // подсчет выходов
+            // РїРѕРґСЃС‡РµС‚ РІС‹С…РѕРґРѕРІ
             cJSON *outputs = cJSON_GetObjectItem(childDevice, "outputs")->child;
             while (outputs) {                
                 outputsQty++;
@@ -1427,8 +1414,8 @@ esp_err_t getOutput(char **response, uint8_t slaveId, uint8_t outputId) {
 }
 
 esp_err_t setOutput(char **response, uint8_t slaveId, uint8_t outputId, uint8_t action) { 
-    // set output или щелкнуть реле 
-    // значения 
+    // set output РёР»Рё С‰РµР»РєРЅСѓС‚СЊ СЂРµР»Рµ 
+    // Р·РЅР°С‡РµРЅРёСЏ 
     ESP_LOGI(TAG, "setOutput"); 
     // convert action to modbus command
     if (action == ACT_TOGGLE) {
@@ -1613,7 +1600,7 @@ cJSON* setActionAliceSlave(cJSON *device) {
     cJSON *dev = cJSON_CreateObject();
     cJSON_AddItemToObject(dev, "id", cJSON_CreateString(cJSON_GetObjectItem(device, "id")->valuestring));
     cJSON *status = cJSON_CreateObject();
-    cJSON_AddItemToObject(status, "status", cJSON_CreateString("DONE")); // пока так, т.к. сразу ответ не придет, единственное можно проверить на наличие слейва и выхода в нем
+    cJSON_AddItemToObject(status, "status", cJSON_CreateString("DONE")); // РїРѕРєР° С‚Р°Рє, С‚.Рє. СЃСЂР°Р·Сѓ РѕС‚РІРµС‚ РЅРµ РїСЂРёРґРµС‚, РµРґРёРЅСЃС‚РІРµРЅРЅРѕРµ РјРѕР¶РЅРѕ РїСЂРѕРІРµСЂРёС‚СЊ РЅР° РЅР°Р»РёС‡РёРµ СЃР»РµР№РІР° Рё РІС‹С…РѕРґР° РІ РЅРµРј
     cJSON_AddItemToObject(dev, "action_result", status);        
         
     // cJSON_AddItemToObject(dev, "type", cJSON_CreateString("devices.capabilities.on_off"));
@@ -1633,7 +1620,7 @@ bool isRGBDevice(char* id) {
 }
 
 esp_err_t setActionAlice(char **response, char *content, char* requestId) { 
-    // выставить значение устройства алисы    
+    // РІС‹СЃС‚Р°РІРёС‚СЊ Р·РЅР°С‡РµРЅРёРµ СѓСЃС‚СЂРѕР№СЃС‚РІР° Р°Р»РёСЃС‹    
     ESP_LOGI(TAG, "setActionAlice");     
     
     cJSON *payload = cJSON_Parse(content);
@@ -1680,8 +1667,8 @@ esp_err_t setActionAlice(char **response, char *content, char* requestId) {
 }
 
 uint8_t getOutputState(uint8_t slaveId, uint8_t outputId) {
-    // получить состояние выхода устройства
-    // TODO : переделать, добавить проверку если выход не найден - ошибку вернуть
+    // РїРѕР»СѓС‡РёС‚СЊ СЃРѕСЃС‚РѕСЏРЅРёРµ РІС‹С…РѕРґР° СѓСЃС‚СЂРѕР№СЃС‚РІР°
+    // TODO : РїРµСЂРµРґРµР»Р°С‚СЊ, РґРѕР±Р°РІРёС‚СЊ РїСЂРѕРІРµСЂРєСѓ РµСЃР»Рё РІС‹С…РѕРґ РЅРµ РЅР°Р№РґРµРЅ - РѕС€РёР±РєСѓ РІРµСЂРЅСѓС‚СЊ
     uint8_t res = 0;
     cJSON *childOutput = NULL;
     cJSON *childDevice = devices->child;    
@@ -1707,7 +1694,7 @@ uint8_t getOutputState(uint8_t slaveId, uint8_t outputId) {
 }
 
 esp_err_t getQueryDevicesAlice(char **response, char *content, char* requestId) { 
-    // выставить значение устройства алисы    
+    // РІС‹СЃС‚Р°РІРёС‚СЊ Р·РЅР°С‡РµРЅРёРµ СѓСЃС‚СЂРѕР№СЃС‚РІР° Р°Р»РёСЃС‹    
     ESP_LOGI(TAG, "getQueryDevicesAlice");     
     uint8_t slaveId, outputId, value;
 
@@ -1735,7 +1722,7 @@ esp_err_t getQueryDevicesAlice(char **response, char *content, char* requestId) 
     cJSON *childDevice = cJSON_GetObjectItem(payload, "devices")->child;            
     while (childDevice) {
         // get slaveid and output
-        // пока предположим что есть у всех, но потом надо проверку на наличие сделать        
+        // РїРѕРєР° РїСЂРµРґРїРѕР»РѕР¶РёРј С‡С‚Рѕ РµСЃС‚СЊ Сѓ РІСЃРµС…, РЅРѕ РїРѕС‚РѕРј РЅР°РґРѕ РїСЂРѕРІРµСЂРєСѓ РЅР° РЅР°Р»РёС‡РёРµ СЃРґРµР»Р°С‚СЊ        
         slaveId = cJSON_GetObjectItem(cJSON_GetObjectItem(childDevice, "custom_data"), "slaveid")->valueint;
         outputId = cJSON_GetObjectItem(cJSON_GetObjectItem(childDevice, "custom_data"), "output")->valueint;
         value = getOutputState(slaveId, outputId);
@@ -1814,7 +1801,7 @@ esp_err_t getQueryDevicesAlice(char **response, char *content, char* requestId) 
 }
 
 esp_err_t switchOutput(char **response, char *content) {       
-    // на вход прилетает JSON, в котором описано что делать с конкретным выходом
+    // РЅР° РІС…РѕРґ РїСЂРёР»РµС‚Р°РµС‚ JSON, РІ РєРѕС‚РѕСЂРѕРј РѕРїРёСЃР°РЅРѕ С‡С‚Рѕ РґРµР»Р°С‚СЊ СЃ РєРѕРЅРєСЂРµС‚РЅС‹Рј РІС‹С…РѕРґРѕРј
     ESP_LOGI(TAG, "switchOutput");
 
     if (!cJSON_IsObject(devices) && !cJSON_IsArray(devices)) {
@@ -1955,7 +1942,7 @@ esp_err_t getNetworkConfig(char **response) {
 
 esp_err_t setNetworkConfig(char **response, char *content) {
     cJSON *parent = cJSON_Parse(content);
-    bool isEth, isWifi; // требовать ли адреса етх или вифи
+    bool isEth, isWifi; // С‚СЂРµР±РѕРІР°С‚СЊ Р»Рё Р°РґСЂРµСЃР° РµС‚С… РёР»Рё РІРёС„Рё
     if(!cJSON_IsObject(parent))
     {
         setErrorText(response, "Is not a JSON object");
@@ -1983,7 +1970,7 @@ esp_err_t setNetworkConfig(char **response, char *content) {
                 cJSON_GetObjectItem(parent, "networkmode")->valueint == 0;
         isWifi = cJSON_GetObjectItem(parent, "networkmode")->valueint == 2 ||
                 cJSON_GetObjectItem(parent, "networkmode")->valueint == 1;
-        // если выбран етх и включен дхцп то не требовать адреса
+        // РµСЃР»Рё РІС‹Р±СЂР°РЅ РµС‚С… Рё РІРєР»СЋС‡РµРЅ РґС…С†Рї С‚Рѕ РЅРµ С‚СЂРµР±РѕРІР°С‚СЊ Р°РґСЂРµСЃР°
         if (isEth && cJSON_IsTrue(cJSON_GetObjectItem(parent, "ethdhcp")))
             isEth = false;
         if (isWifi && cJSON_IsTrue(cJSON_GetObjectItem(parent, "wifidhcp")))
@@ -2091,7 +2078,7 @@ esp_err_t uiRouter(httpd_req_t *req) {
             err = ESP_FAIL;
             setErrorText(&response, "No slaveid");            
         }
-    // вообще непонятно зачем device и devices. Вроде одного должно было хватить    
+    // РІРѕРѕР±С‰Рµ РЅРµРїРѕРЅСЏС‚РЅРѕ Р·Р°С‡РµРј device Рё devices. Р’СЂРѕРґРµ РѕРґРЅРѕРіРѕ РґРѕР»Р¶РЅРѕ Р±С‹Р»Рѕ С…РІР°С‚РёС‚СЊ    
     } else if (!strcmp(uri, "/ui/devices")) {
         if (req->method == HTTP_GET) {
             httpd_resp_set_type(req, "application/json");
@@ -2357,8 +2344,8 @@ esp_err_t uiRouter(httpd_req_t *req) {
 }
 
 void setDeviceOutputValues(uint8_t slaveid, uint16_t values, uint8_t offset, uint8_t size) {
-    // выставить выходы конкретного устойства в массиве устройств devices
-    // values - значения для выходов без учета сдвига
+    // РІС‹СЃС‚Р°РІРёС‚СЊ РІС‹С…РѕРґС‹ РєРѕРЅРєСЂРµС‚РЅРѕРіРѕ СѓСЃС‚РѕР№СЃС‚РІР° РІ РјР°СЃСЃРёРІРµ СѓСЃС‚СЂРѕР№СЃС‚РІ devices
+    // values - Р·РЅР°С‡РµРЅРёСЏ РґР»СЏ РІС‹С…РѕРґРѕРІ Р±РµР· СѓС‡РµС‚Р° СЃРґРІРёРіР°
     ESP_LOGD(TAG, "setDeviceOutputValues slaveid %d values %d offset %d", slaveid, values, offset);
     cJSON *child = devices->child;
     while (child) {
@@ -2386,7 +2373,7 @@ void setDeviceOutputValues(uint8_t slaveid, uint16_t values, uint8_t offset, uin
 }
 
 void setDeviceOutputValues2(uint8_t slaveid, uint8_t *values) {
-    // выставить выходы конкретного устойства в массиве устройств devices    
+    // РІС‹СЃС‚Р°РІРёС‚СЊ РІС‹С…РѕРґС‹ РєРѕРЅРєСЂРµС‚РЅРѕРіРѕ СѓСЃС‚РѕР№СЃС‚РІР° РІ РјР°СЃСЃРёРІРµ СѓСЃС‚СЂРѕР№СЃС‚РІ devices    
     cJSON *child = devices->child;
     while (child) {
         if (cJSON_GetObjectItem(child, "slaveid")->valueint == slaveid) {
@@ -2414,8 +2401,8 @@ void setDeviceOutputValues2(uint8_t slaveid, uint8_t *values) {
 }
 
 void setDeviceInputValues(uint8_t slaveid, uint16_t values, uint8_t offset, uint8_t size) {
-    // выставить входы конкретного устойства в массиве устройств devices.
-    // values - значения для входов без учета сдвига
+    // РІС‹СЃС‚Р°РІРёС‚СЊ РІС…РѕРґС‹ РєРѕРЅРєСЂРµС‚РЅРѕРіРѕ СѓСЃС‚РѕР№СЃС‚РІР° РІ РјР°СЃСЃРёРІРµ СѓСЃС‚СЂРѕР№СЃС‚РІ devices.
+    // values - Р·РЅР°С‡РµРЅРёСЏ РґР»СЏ РІС…РѕРґРѕРІ Р±РµР· СѓС‡РµС‚Р° СЃРґРІРёРіР°
     ESP_LOGD(TAG, "setDeviceInputValues slaveid %d values %d offset %d", slaveid, values, offset);
     cJSON *child = devices->child;
     while (child) {
@@ -2443,7 +2430,7 @@ void setDeviceInputValues(uint8_t slaveid, uint16_t values, uint8_t offset, uint
 }
 
 void setDeviceInputValues2(uint8_t slaveid, uint8_t *values) {
-    // выставить входы конкретного устройства в массиве устройств devices.        
+    // РІС‹СЃС‚Р°РІРёС‚СЊ РІС…РѕРґС‹ РєРѕРЅРєСЂРµС‚РЅРѕРіРѕ СѓСЃС‚СЂРѕР№СЃС‚РІР° РІ РјР°СЃСЃРёРІРµ СѓСЃС‚СЂРѕР№СЃС‚РІ devices.        
     cJSON *child = devices->child;
     while (child) {
         if (cJSON_GetObjectItem(child, "slaveid")->valueint == slaveid) {
@@ -2454,7 +2441,7 @@ void setDeviceInputValues2(uint8_t slaveid, uint8_t *values) {
                 while (input) {
                     uint8_t id = cJSON_GetObjectItem(input, "id")->valueint;
                     if (id < size) {
-                        // значения лежат по 8 в каждом байте, младший бит в последнем байте                        
+                        // Р·РЅР°С‡РµРЅРёСЏ Р»РµР¶Р°С‚ РїРѕ 8 РІ РєР°Р¶РґРѕРј Р±Р°Р№С‚Рµ, РјР»Р°РґС€РёР№ Р±РёС‚ РІ РїРѕСЃР»РµРґРЅРµРј Р±Р°Р№С‚Рµ                        
                         uint8_t value = (values[id/8] >> (id-8*(id/8))) & 0x01;
                         if (cJSON_IsNumber(cJSON_GetObjectItem(input, "curVal")))
                             cJSON_ReplaceItemInObject(input, "curVal", cJSON_CreateNumber(value));                      
@@ -2578,7 +2565,7 @@ void publish(uint8_t slaveId, uint8_t outputId, uint8_t action) {
     ESP_LOGI(TAG, "MQTT publush slaveId %d, outputId %d, action %d", slaveId, outputId, action);
     char* data = "OFF";
     if (action == ACT_TOGGLE) {
-        // узнать какое значение было до, чтобы понять что публиковать
+        // СѓР·РЅР°С‚СЊ РєР°РєРѕРµ Р·РЅР°С‡РµРЅРёРµ Р±С‹Р»Рѕ РґРѕ, С‡С‚РѕР±С‹ РїРѕРЅСЏС‚СЊ С‡С‚Рѕ РїСѓР±Р»РёРєРѕРІР°С‚СЊ
         //ESP_LOGI(TAG, "MQTT current output value is %d", getOutputState(slaveId, outputId));
         if (getOutputState(slaveId, outputId) == 0)
             data = "ON";
@@ -2602,7 +2589,7 @@ void publish(uint8_t slaveId, uint8_t outputId, uint8_t action) {
 }
 
 void processActions() {
-    // выполнить действия   
+    // РІС‹РїРѕР»РЅРёС‚СЊ РґРµР№СЃС‚РІРёСЏ   
     ESP_LOGD(TAG, "processActions qty %d", actions_qty);
     char buf[MSG_BUFFER];
     for (uint8_t i=0; i<actions_qty; i++) {
@@ -2623,9 +2610,6 @@ void processActions() {
             doMBSetCoil(actions[i]->slave_addr, actions[i]->output, actions[i]->action);
         }
 
-        // TODO : publish mqtt on same device
-        
-
         /*            
         else if (action[i]->action == ACT_TOGGLE) // toggle
         {
@@ -2643,8 +2627,8 @@ void processActions() {
 }
 
 void processEvent(event_t *event) {
-    // обработка одного события
-    // нужно найти действия
+    // РѕР±СЂР°Р±РѕС‚РєР° РѕРґРЅРѕРіРѕ СЃРѕР±С‹С‚РёСЏ
+    // РЅСѓР¶РЅРѕ РЅР°Р№С‚Рё РґРµР№СЃС‚РІРёСЏ
     if (!cJSON_IsArray(devices) || cJSON_GetArraySize(devices) == 0) {
         ESP_LOGE(TAG, "devices is not a json array");
         return;
@@ -2710,7 +2694,7 @@ char* getDeviceStatus(uint8_t slaveId) {
 }
 
 void changeDevStatus(uint8_t slaveId, char* status) {
-    // выставить флаг онлайн устройству
+    // РІС‹СЃС‚Р°РІРёС‚СЊ С„Р»Р°Рі РѕРЅР»Р°Р№РЅ СѓСЃС‚СЂРѕР№СЃС‚РІСѓ
     ESP_LOGD(TAG, "slaveid %d, status %s", slaveId, status);
     char message[MSG_BUFFER];
     sprintf(message, "Device %d changed state to %s", slaveId, status);
@@ -2718,7 +2702,7 @@ void changeDevStatus(uint8_t slaveId, char* status) {
     while (childDevice) {
         if (cJSON_GetObjectItem(childDevice, "slaveid")->valueint == slaveId) {
             if (strcmp(cJSON_GetObjectItem(childDevice, "status")->valuestring, status)) {
-                // статус не соответствует, записать в лог
+                // СЃС‚Р°С‚СѓСЃ РЅРµ СЃРѕРѕС‚РІРµС‚СЃС‚РІСѓРµС‚, Р·Р°РїРёСЃР°С‚СЊ РІ Р»РѕРі
                 if (!strcmp(status, "online"))
                     writeLog("I", message);
                 else 
@@ -2738,19 +2722,19 @@ char isEqualsVals(uint8_t *val1, uint8_t *val2, uint8_t len) {
 }
 
 uint16_t decDeviceWaitingRetries(uint8_t slaveId) {
-    // уменьшить счетчик числа ожиданий для оффлайн устройства при поллинге. Вернет оставшееся кол-во ожиданий
+    // СѓРјРµРЅСЊС€РёС‚СЊ СЃС‡РµС‚С‡РёРє С‡РёСЃР»Р° РѕР¶РёРґР°РЅРёР№ РґР»СЏ РѕС„С„Р»Р°Р№РЅ СѓСЃС‚СЂРѕР№СЃС‚РІР° РїСЂРё РїРѕР»Р»РёРЅРіРµ. Р’РµСЂРЅРµС‚ РѕСЃС‚Р°РІС€РµРµСЃСЏ РєРѕР»-РІРѕ РѕР¶РёРґР°РЅРёР№
     uint16_t curRetries = 0;
     cJSON *childDevice = devices->child;
     while (childDevice) {
         if (cJSON_GetObjectItem(childDevice, "slaveid")->valueint == slaveId) {
             if (!cJSON_IsNumber(cJSON_GetObjectItem(childDevice, "waitingRetries"))) {
-                // если не было параметра с попытками - создать и установить макс значение
+                // РµСЃР»Рё РЅРµ Р±С‹Р»Рѕ РїР°СЂР°РјРµС‚СЂР° СЃ РїРѕРїС‹С‚РєР°РјРё - СЃРѕР·РґР°С‚СЊ Рё СѓСЃС‚Р°РЅРѕРІРёС‚СЊ РјР°РєСЃ Р·РЅР°С‡РµРЅРёРµ
                 cJSON_AddItemToObject(childDevice, "waitingRetries", 
                                       cJSON_CreateNumber(getServiceConfigValueInt("waitingRetries")));                
             }
             curRetries = cJSON_GetObjectItem(childDevice, "waitingRetries")->valueint;
             if (curRetries == 0) {
-                // если не останется ничего, то ничего не делаем
+                // РµСЃР»Рё РЅРµ РѕСЃС‚Р°РЅРµС‚СЃСЏ РЅРёС‡РµРіРѕ, С‚Рѕ РЅРёС‡РµРіРѕ РЅРµ РґРµР»Р°РµРј
                 return 0;
             }
             cJSON_ReplaceItemInObject(childDevice, "waitingRetries", cJSON_CreateNumber(--curRetries));
@@ -2766,7 +2750,7 @@ void resetDeviceWaitingRetries(uint8_t slaveId) {
     while (childDevice) {
         if (cJSON_GetObjectItem(childDevice, "slaveid")->valueint == slaveId) {
             if (!cJSON_IsNumber(cJSON_GetObjectItem(childDevice, "waitingRetries"))) {
-                // если не было параметра с попытками - создать и установить макс значение
+                // РµСЃР»Рё РЅРµ Р±С‹Р»Рѕ РїР°СЂР°РјРµС‚СЂР° СЃ РїРѕРїС‹С‚РєР°РјРё - СЃРѕР·РґР°С‚СЊ Рё СѓСЃС‚Р°РЅРѕРІРёС‚СЊ РјР°РєСЃ Р·РЅР°С‡РµРЅРёРµ
                 cJSON_AddItemToObject(childDevice, "waitingRetries", 
                                       cJSON_CreateNumber(getServiceConfigValueInt("waitingRetries")));
             }            
@@ -2779,19 +2763,19 @@ void resetDeviceWaitingRetries(uint8_t slaveId) {
 }
 
 uint16_t decDevicePollingRetries(uint8_t slaveId) {
-    // уменьшить счетчик числа обращений к усройству. Вернет оставшееся кол-во обращений    
+    // СѓРјРµРЅСЊС€РёС‚СЊ СЃС‡РµС‚С‡РёРє С‡РёСЃР»Р° РѕР±СЂР°С‰РµРЅРёР№ Рє СѓСЃСЂРѕР№СЃС‚РІСѓ. Р’РµСЂРЅРµС‚ РѕСЃС‚Р°РІС€РµРµСЃСЏ РєРѕР»-РІРѕ РѕР±СЂР°С‰РµРЅРёР№    
     uint16_t curRetries = 0;
     cJSON *childDevice = devices->child;
     while (childDevice) {
         if (cJSON_GetObjectItem(childDevice, "slaveid")->valueint == slaveId) {
             if (!cJSON_IsNumber(cJSON_GetObjectItem(childDevice, "pollingRetries"))) {
-                // если не было параметра с попытками - создать и установить макс значение
+                // РµСЃР»Рё РЅРµ Р±С‹Р»Рѕ РїР°СЂР°РјРµС‚СЂР° СЃ РїРѕРїС‹С‚РєР°РјРё - СЃРѕР·РґР°С‚СЊ Рё СѓСЃС‚Р°РЅРѕРІРёС‚СЊ РјР°РєСЃ Р·РЅР°С‡РµРЅРёРµ
                 cJSON_AddItemToObject(childDevice, "pollingRetries", 
                                       cJSON_CreateNumber(getServiceConfigValueInt("pollingRetries")));                
             }
             curRetries = cJSON_GetObjectItem(childDevice, "pollingRetries")->valueint;
             if (curRetries == 0) {
-                // если не останется ничего, то ничего не делаем
+                // РµСЃР»Рё РЅРµ РѕСЃС‚Р°РЅРµС‚СЃСЏ РЅРёС‡РµРіРѕ, С‚Рѕ РЅРёС‡РµРіРѕ РЅРµ РґРµР»Р°РµРј
                 return 0;
             }
             cJSON_ReplaceItemInObject(childDevice, "pollingRetries", cJSON_CreateNumber(--curRetries));
@@ -2807,7 +2791,7 @@ void resetDevicePollingRetries(uint8_t slaveId) {
     while (childDevice) {
         if (cJSON_GetObjectItem(childDevice, "slaveid")->valueint == slaveId) {
             if (!cJSON_IsNumber(cJSON_GetObjectItem(childDevice, "pollingRetries"))) {
-                // если не было параметра с попытками - создать и установить макс значение
+                // РµСЃР»Рё РЅРµ Р±С‹Р»Рѕ РїР°СЂР°РјРµС‚СЂР° СЃ РїРѕРїС‹С‚РєР°РјРё - СЃРѕР·РґР°С‚СЊ Рё СѓСЃС‚Р°РЅРѕРІРёС‚СЊ РјР°РєСЃ Р·РЅР°С‡РµРЅРёРµ
                 cJSON_AddItemToObject(childDevice, "pollingRetries", 
                                       cJSON_CreateNumber(getServiceConfigValueInt("pollingRetries")));
             }            
@@ -2820,7 +2804,7 @@ void resetDevicePollingRetries(uint8_t slaveId) {
 }
 
 void makePollingList() {
-    // формируем список для поллинга
+    // С„РѕСЂРјРёСЂСѓРµРј СЃРїРёСЃРѕРє РґР»СЏ РїРѕР»Р»РёРЅРіР°
     pollingList[0] = 0;
     if (!cJSON_IsArray(devices) || cJSON_GetArraySize(devices) < 1) {
         return; 
@@ -2862,7 +2846,7 @@ uint16_t getSlaveOutputsValues(uint8_t slaveId) {
                 while (output) {
                     uint8_t id = cJSON_GetObjectItem(output, "id")->valueint;
                     if (id < 16) {
-                        // вдруг что-то не так...                        
+                        // РІРґСЂСѓРі С‡С‚Рѕ-С‚Рѕ РЅРµ С‚Р°Рє...                        
                         if (cJSON_IsNumber(cJSON_GetObjectItem(output, "curVal")) && 
                             cJSON_GetObjectItem(output, "curVal")->valueint) {
                             setbit(values, id);
@@ -2890,7 +2874,7 @@ uint32_t getSlaveInputsValues(uint8_t slaveId) {
                 while (input) {
                     uint8_t id = cJSON_GetObjectItem(input, "id")->valueint;
                     if (id < 32) {
-                        // вдруг что-то не так...                        
+                        // РІРґСЂСѓРі С‡С‚Рѕ-С‚Рѕ РЅРµ С‚Р°Рє...                        
                         if (cJSON_IsNumber(cJSON_GetObjectItem(input, "curVal")) && 
                             cJSON_GetObjectItem(input, "curVal")->valueint) {
                             setbit(values, id);
@@ -2907,15 +2891,15 @@ uint32_t getSlaveInputsValues(uint8_t slaveId) {
 }
 
 void queryDevice(uint8_t slaveId) {
-    // опрос устройства
-    // экспериментальный вариант
+    // РѕРїСЂРѕСЃ СѓСЃС‚СЂРѕР№СЃС‚РІР°
+    // СЌРєСЃРїРµСЂРёРјРµРЅС‚Р°Р»СЊРЅС‹Р№ РІР°СЂРёР°РЅС‚
     // ESP_LOGI(TAG, "queryDevice slaveId %d", slaveId);
     if (!strcmp(getDeviceStatus(slaveId), "offline")) { // (decDevicePollingRetries(slaveId) == 0) {
-        // если текущий девайс в оффлайне, то полить реже
+        // РµСЃР»Рё С‚РµРєСѓС‰РёР№ РґРµРІР°Р№СЃ РІ РѕС„С„Р»Р°Р№РЅРµ, С‚Рѕ РїРѕР»РёС‚СЊ СЂРµР¶Рµ
         if (decDeviceWaitingRetries(slaveId) > 0) {
             return;
         } else {
-            // дождались своей очереди, можно пробовать опрос
+            // РґРѕР¶РґР°Р»РёСЃСЊ СЃРІРѕРµР№ РѕС‡РµСЂРµРґРё, РјРѕР¶РЅРѕ РїСЂРѕР±РѕРІР°С‚СЊ РѕРїСЂРѕСЃ
             resetDeviceWaitingRetries(slaveId);
         }
     }
@@ -2927,9 +2911,9 @@ void queryDevice(uint8_t slaveId) {
     uint8_t pollingMode = getPollingMode(slaveId);
     if (pollingMode == 0x04) {
         // polling for owen
-        // поллинг без событий
-        // 512 регистр выходы 
-        // 513-514 входы 
+        // РїРѕР»Р»РёРЅРі Р±РµР· СЃРѕР±С‹С‚РёР№
+        // 512 СЂРµРіРёСЃС‚СЂ РІС‹С…РѕРґС‹ 
+        // 513-514 РІС…РѕРґС‹ 
         res = executeModbusCommand(slaveId, MB_READ_HOLDINGS, 512, 3, &response);
         if (res == ESP_OK) {
             changeDevStatus(slaveId, "online");
@@ -2955,7 +2939,7 @@ void queryDevice(uint8_t slaveId) {
                         else
                             event->event = 1;
                         processEvent(event);
-                        processActions(); // просто построит очередь, которую потом обработает processQueue                
+                        //processActions();
                         free(event);
                     }
                 }
@@ -2966,7 +2950,7 @@ void queryDevice(uint8_t slaveId) {
             outputs[0] = response[1];
             outputs[1] = response[0];
             setDeviceOutputValues2(slaveId, outputs);
-            // добавить событийную логику, основываясь на предыдущих значениях
+            // РґРѕР±Р°РІРёС‚СЊ СЃРѕР±С‹С‚РёР№РЅСѓСЋ Р»РѕРіРёРєСѓ, РѕСЃРЅРѕРІС‹РІР°СЏСЃСЊ РЅР° РїСЂРµРґС‹РґСѓС‰РёС… Р·РЅР°С‡РµРЅРёСЏС…
         } 
     } else if (pollingMode == 0x08) {
         // events polling (my devices)
@@ -2988,7 +2972,7 @@ void queryDevice(uint8_t slaveId) {
             if (event->event > 0) {
                 ESP_LOGI(TAG, "Event %d on input %d slaveId %d", event->event, event->input, event->slave_addr);
                 processEvent(event);
-                processActions(); // просто построит очередь, которую потом обработает processQueue
+                //processActions();
             }
             free(event);
             //free(response); 
@@ -2996,7 +2980,7 @@ void queryDevice(uint8_t slaveId) {
     }   
 
     if (res != ESP_OK) {
-        // уменьшить счетчик обращений
+        // СѓРјРµРЅСЊС€РёС‚СЊ СЃС‡РµС‚С‡РёРє РѕР±СЂР°С‰РµРЅРёР№
         if (decDevicePollingRetries(slaveId) == 0) {
             changeDevStatus(slaveId, "offline");    
         }                         
@@ -3007,7 +2991,7 @@ void queryDevice(uint8_t slaveId) {
 }
 
 void pollingNew() {
-    // определить какие устройства надо полить
+    // РѕРїСЂРµРґРµР»РёС‚СЊ РєР°РєРёРµ СѓСЃС‚СЂРѕР№СЃС‚РІР° РЅР°РґРѕ РїРѕР»РёС‚СЊ
     static uint8_t curIndx = 0;
     if (pollingList[curIndx] == 0) {
         curIndx = 0;        
@@ -3018,7 +3002,8 @@ void pollingNew() {
         queryDevice(slaveId);        
     }
 
-    processQueue(); // накопившиеся действия над выходами
+    processActions();
+    processQueue(); // РЅР°РєРѕРїРёРІС€РёРµСЃСЏ РґРµР№СЃС‚РІРёСЏ РЅР°Рґ РІС‹С…РѕРґР°РјРё
 }
 
 SemaphoreHandle_t getSemaphore() {
@@ -3084,14 +3069,14 @@ void phyPower(bool on_off) {
     gpio_set_level(PHYPWRPIN, on_off);
 }
 
-// Если девай отвалился, пробуем его опросить Х раз и если не ответил, оффлайн
-// По оффлайн девайсам смотреть признак поллинга и полить раз в У времени или попыток и если ответил - выводить в онлайн
+// Р•СЃР»Рё РґРµРІР°Р№ РѕС‚РІР°Р»РёР»СЃСЏ, РїСЂРѕР±СѓРµРј РµРіРѕ РѕРїСЂРѕСЃРёС‚СЊ РҐ СЂР°Р· Рё РµСЃР»Рё РЅРµ РѕС‚РІРµС‚РёР», РѕС„С„Р»Р°Р№РЅ
+// РџРѕ РѕС„С„Р»Р°Р№РЅ РґРµРІР°Р№СЃР°Рј СЃРјРѕС‚СЂРµС‚СЊ РїСЂРёР·РЅР°Рє РїРѕР»Р»РёРЅРіР° Рё РїРѕР»РёС‚СЊ СЂР°Р· РІ РЈ РІСЂРµРјРµРЅРё РёР»Рё РїРѕРїС‹С‚РѕРє Рё РµСЃР»Рё РѕС‚РІРµС‚РёР» - РІС‹РІРѕРґРёС‚СЊ РІ РѕРЅР»Р°Р№РЅ
 
 
 /*
 esp_err_t setDMXDevice(char **response, char *content) {    
     // add/edit DMXdevice
-    // обновит текущее устройство по айди или добавит новое если такого нет    
+    // РѕР±РЅРѕРІРёС‚ С‚РµРєСѓС‰РµРµ СѓСЃС‚СЂРѕР№СЃС‚РІРѕ РїРѕ Р°Р№РґРё РёР»Рё РґРѕР±Р°РІРёС‚ РЅРѕРІРѕРµ РµСЃР»Рё С‚Р°РєРѕРіРѕ РЅРµС‚    
     ESP_LOGI(TAG, "setDMXDevice");
 
     if (!cJSON_IsArray(DMXdevices)) {
@@ -3115,8 +3100,8 @@ esp_err_t setDMXDevice(char **response, char *content) {
         Id = cJSON_GetObjectItem(data, "id")->valuestring;
     }
     
-    // TODO : добавить валидацию payload
-    // ищем существующий айди в массиве и удаляем его если найдем, далее просто добавляем все, что есть
+    // TODO : РґРѕР±Р°РІРёС‚СЊ РІР°Р»РёРґР°С†РёСЋ payload
+    // РёС‰РµРј СЃСѓС‰РµСЃС‚РІСѓСЋС‰РёР№ Р°Р№РґРё РІ РјР°СЃСЃРёРІРµ Рё СѓРґР°Р»СЏРµРј РµРіРѕ РµСЃР»Рё РЅР°Р№РґРµРј, РґР°Р»РµРµ РїСЂРѕСЃС‚Рѕ РґРѕР±Р°РІР»СЏРµРј РІСЃРµ, С‡С‚Рѕ РµСЃС‚СЊ
     uint8_t idx = 0;
     // bool found = false;
     cJSON *childDevice = DMXdevices->child;        

@@ -10,6 +10,19 @@ typedef enum {
     LED_OTA      // OTA update
 } led_status_t;
 
+typedef struct {
+    uint8_t slave_addr; // адрес устройства назначения
+    uint8_t output;     // номер выхода           
+    uint8_t action;     // действие action_type_t
+} action_t;
+
+typedef enum {
+    ACT_NOTHING, // nothing 
+    ACT_ON,      // switch on 
+    ACT_OFF,     // switch off
+    ACT_TOGGLE   // toggle     
+} action_type_t;
+
 void initLED();
 void changeLEDStatus(uint8_t status);
 esp_err_t loadConfig();
@@ -25,3 +38,5 @@ void processDMXDevices();
 SemaphoreHandle_t getSemaphore();
 void createSemaphore();
 void phyPower(bool on_off);
+uint8_t getActionValue(char * str);
+void addAction(action_t pAction);

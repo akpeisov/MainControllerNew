@@ -21,6 +21,7 @@ function loadData() {
         $("#ntpserver").val(json.ntpserver);         
         $("#ntpTZ").val(json.ntpTZ);         
         $("#otaURL").val(json.otaURL);         
+        $("#MQTTuri").val(json.MQTTuri);         
     });    
 }
 
@@ -79,6 +80,7 @@ function saveData() {
     json.ntpserver = $("#ntpserver").val();
     json.ntpTZ = $("#ntpTZ").val();   
     json.otaURL = $("#otaURL").val();   
+    json.MQTTuri = $("#MQTTuri").val();   
     console.log(json);
     $.ajax({
         type: "POST",
