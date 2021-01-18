@@ -1,0 +1,64 @@
+<html>
+<head>
+	<title></title>
+	<link href="css/main.css" rel="stylesheet" type="text/css">	
+	<link href="css/tabulator.min.css" rel="stylesheet">
+</head>
+
+	<body>
+	<div id="shadow-one"><div id="shadow-two"><div id="shadow-three"><div id="shadow-four">
+	<div id="page">
+	<div id="title">
+    	<a href="http://home.akpeisov.kz" target="_blank"> <img width="80" src="logo.png" alt="Ipses" style="border:0px; float:left"> </a>
+        <div class="right">HOME-IO Control Panel</div>
+    </div>
+	<div id="menu">
+		<a id="pageStatus">Status</a>
+		<a id="pageDevinfo">Device Info</a>
+		<a id="pageDevconfig">Device Config</a>
+		<a id="pageService">Service configuration</a>
+		<a id="pageNetwork">Network configuration</a>
+		<a id="pageLogs">Logs</a>
+		<a id="pageSystem">System</a>
+	</div>
+    
+	<div id="content"></div>	
+	    
+ 	<script src="js/jquery-3.4.1.min.js"></script>
+ 	<script type="text/javascript" src="js/tabulator.min.js"></script>
+	<script type="text/javascript">
+	<!--
+		//Initialize events for update functions
+		var globalId = "";
+		var intervalId;
+		var root = window.location.origin;
+ 		$("a").click(function(obj){
+ 			// remove old counter
+ 			clearInterval(intervalId);
+ 			console.log(obj.target.id); 			
+        	        $("#content").load(obj.target.id+".html", function( response, status, xhr ) {
+			  if (status == "error") {
+			    var msg = "Error: ";
+			    $( "#error" ).html( msg + xhr.status + " " + xhr.statusText );
+			    $("#content").html("");
+			    console.log(xhr);
+			    globalId = "";
+			  } else {
+			  	globalId = obj.target.id;
+			  	$( "#error" ).html("");
+			  }			
+	 		});
+        });
+	//-->
+	</script>
+
+<div class="spacer">&nbsp;</div>
+<div id="error"></div>	
+<div id="footer">Copyright (c) 2020 <span class="ipseslink"><a href="http://home.akpeisov.kz" target="_blank">home.akpeisov.kz</a></span></div>
+<br></div>
+
+<div id="error"></div>
+</div></div></div></div>
+
+</body>
+</html>

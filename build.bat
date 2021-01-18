@@ -1,2 +1,2 @@
 idf.py build
-copy build\MainControllerNew.bin z:
+copy build\MainControllerNew.bin y:

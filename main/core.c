@@ -26,8 +26,8 @@ static cJSON *temperaturesData;
 #define DEF_MASK        "255.255.255.0"
 #define DEF_GW          "192.168.99.98"
 #define DEF_DNS         "192.168.99.98"
-#define DEF_WIFI_SSID   "DevCtrl"
-#define DEF_WIFI_PASS   "60380003"
+#define DEF_WIFI_SSID   "YourWifi"
+#define DEF_WIFI_PASS   "12345678"
 #define DEF_DHCP_EN     1
 //service config defaults
 #define DEF_NAME        "Device-0"
@@ -64,6 +64,9 @@ static uint8_t actions_qty = 0;
 SemaphoreHandle_t sem_busy;
 uint8_t pollingList[MAX_DEVICES];
 static action_t* actions[MAX_ACTIONS];
+
+//headers
+void publish(uint8_t slaveId, uint8_t outputId, uint8_t action);
 
 esp_err_t loadDevices() {
     char * buffer = NULL;
@@ -169,7 +172,7 @@ esp_err_t createNetworkConfig() {
     cJSON_AddItemToObject(networkConfig, "dns", cJSON_CreateString(DEF_DNS));
     cJSON_AddItemToObject(networkConfig, "hostname", cJSON_CreateString(DEF_NAME));
     cJSON_AddItemToObject(networkConfig, "ntpserver", cJSON_CreateString("pool.ntp.org"));
-    cJSON_AddItemToObject(networkConfig, "ntpTZ", cJSON_CreateString("Asia/Almaty"));
+    cJSON_AddItemToObject(networkConfig, "ntpTZ", cJSON_CreateString("UTC-6:00"));
     cJSON_AddItemToObject(networkConfig, "configured", cJSON_CreateFalse());
     cJSON_AddItemToObject(networkConfig, "otaurl", cJSON_CreateString("https://192.168.99.6:8443/MainControllerNew.bin"));
     
@@ -728,6 +731,30 @@ esp_err_t setTemperatures(char **response, char *content) {
     return ESP_OK;
 }
 
+esp_err_t getTest(char **response) {
+    ESP_LOGI(TAG, "getTest");    
+    
+    setText(response, "Starting remote logs!");    
+    return ESP_OK;    
+}
+
+esp_err_t setTest(char **response, char *content) {        
+    // for test purpose
+    ESP_LOGI(TAG, "setTest");
+
+    //new data
+    cJSON *data = cJSON_Parse(content);
+    if(!cJSON_IsArray(data)) {
+        setErrorText(response, "Can't parse content. Not json array!");
+        return ESP_FAIL;
+    }
+    
+    publish(77, 8, 1);
+     
+    setText(response, "OK");    
+    return ESP_OK;
+}
+
 void getTempColors(uint16_t temp, uint8_t *r, uint8_t *g, uint8_t *b, uint8_t *w) {
     // TODO : make getter colors
     bool found = false;
@@ -1132,11 +1159,11 @@ esp_err_t setEvents(char **response, unsigned char slaveId, unsigned char inputI
     // validate data
     cJSON *childData = data->child;
     while (childData) {     
-        if (!cJSON_IsString(cJSON_GetObjectItem(childData, "name")) || 
-            (cJSON_GetObjectItem(childData, "name")->valuestring == NULL)) {
-            setErrorText(response, "Property name not set");
-            return ESP_FAIL;
-        }
+        // if (!cJSON_IsString(cJSON_GetObjectItem(childData, "name")) || 
+        //     (cJSON_GetObjectItem(childData, "name")->valuestring == NULL)) {
+        //     setErrorText(response, "Property name not set");
+        //     return ESP_FAIL;
+        // }
         if (!cJSON_IsString(cJSON_GetObjectItem(childData, "action")) || 
             (cJSON_GetObjectItem(childData, "action")->valuestring == NULL)) {
             setErrorText(response, "Property action not set");
@@ -1194,7 +1221,48 @@ esp_err_t getDevices(char **response) {
         return ESP_FAIL;
     }
     
-    *response = cJSON_Print(devices);
+    *response = cJSON_PrintUnformatted(devices);
+    return ESP_OK;    
+}
+
+esp_err_t getDevicesNew(httpd_req_t *req) {
+    ESP_LOGI(TAG, "getDevicesNew");
+    if (!cJSON_IsObject(devices) && !cJSON_IsArray(devices)) {      
+        //setErrorText(response, "devices is not a json");
+        ESP_LOGE(TAG, "Devices isn't json array");
+        return ESP_FAIL;
+    }
+    
+    // try chanks
+    char * devs = cJSON_PrintUnformatted(devices);
+    if (devs == NULL) {
+        ESP_LOGE(TAG, "Can't print json devices");
+        httpd_resp_sendstr_chunk(req, NULL);
+        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Failed to print json");
+        return ESP_FAIL;
+    }
+    uint16_t remaining = strlen(devs);
+    ESP_LOGI(TAG, "Size of devices is %d", remaining);
+    uint16_t pos = 0;
+    uint16_t chunksize = 2048;
+    while (remaining > 0) {
+        char *buf = devs+pos;
+        if (remaining < chunksize)
+            chunksize = remaining;
+        ESP_LOGD(TAG, "Current pos %d. Chunk size is %d", pos, chunksize);
+        if (httpd_resp_send_chunk(req, buf, chunksize) != ESP_OK) {                
+                ESP_LOGE(TAG, "Json sending failed!");
+                httpd_resp_sendstr_chunk(req, NULL);
+                httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Failed to print json");
+                free(devs);
+                return ESP_FAIL;
+        }
+        pos+=chunksize;
+        remaining-=chunksize;
+    }
+    httpd_resp_send_chunk(req, NULL, 0);
+    free(devs);
+    ESP_LOGE(TAG, "Ready");
     return ESP_OK;    
 }
 
@@ -1244,7 +1312,7 @@ char *getTextState(unsigned char value) {
 esp_err_t setDeviceConfig(char **response, uint8_t slaveId) {
     #define delay 100
     /*
-                             Address  Type  Length  Description
+                        Address  Type  Length  Description
     EEPROM_ADR              1      RW     1     device address if not set by jumpers
     EEPROM_CONFIGINPUTS     4      RW     2     config inputs (1 switch, 0 button)
     EEPROM_INPUTSQTY        7      RW     1     inputs qty
@@ -1252,6 +1320,23 @@ esp_err_t setDeviceConfig(char **response, uint8_t slaveId) {
     EEPROM_CONFIG           9      RW     1     config*
     EEPROM_AUTOTIMEOUT     0xA     RW     1     timeout for auto mode, *100ms
     EEPROM_RULES           0xb     RW    16     rules** for each input. HI off, LO on/trig
+    
+    RULES
+    start from 0x100 till 0x
+    for 1 inputs 8 event/rules, 1 byte for 1 rule
+    modbus register have 2 bytes hi and lo
+    address 0x100 contains rule 1 and 2 for input 0
+    address 0x101 contains rule 3 and 4 for input 0
+    address 0x102 contains rule 5 and 6 for input 0
+    address 0x103 contains rule 7 and 8 for input 0
+    address 0x104 contains rule 1 and 2 for input 1
+    ...
+      первый полубайт - номер выхода, второй - событие + команда
+      события: 0 ничего, 1 вкл (перекл), 2 выкл, 3 trig
+      actions: 0 nothing, 1 on, 2 off, 3 toggle 
+                 OUTP EV AC
+      0  inp 0 - 0000 01 01   0x01 - на вкл включить выход 0
+
 
     *config bits
     2 - restore outputs on start
@@ -1267,8 +1352,8 @@ esp_err_t setDeviceConfig(char **response, uint8_t slaveId) {
     uint16_t config = 0;
     uint8_t id;
     // rules
-    uint16_t eventsData[16] = {0};
-    uint8_t event1 = 0, event2 = 0;
+    uint16_t eventsData[16*4] = {0};
+    uint8_t event;
     cJSON *childDevice = devices->child;
     while (childDevice) {
         if (cJSON_GetObjectItem(childDevice, "slaveid")->valueint == slaveId) {
@@ -1281,46 +1366,61 @@ esp_err_t setDeviceConfig(char **response, uint8_t slaveId) {
                 setbit(config, 3);
             }
             // входы
-            cJSON *inputs = cJSON_GetObjectItem(childDevice, "inputs")->child;
-            while (inputs) {
-                inputsQty++;
-                id = cJSON_GetObjectItem(inputs, "id")->valueint;
-                if (id > 15) {
-                    // ерунда какая-то, пропускаем
+            if (cJSON_IsArray(cJSON_GetObjectItem(childDevice, "inputs"))) {
+                cJSON *inputs = cJSON_GetObjectItem(childDevice, "inputs")->child;
+                while (inputs) {
+                    inputsQty++;
+                    id = cJSON_GetObjectItem(inputs, "id")->valueint;
+                    if (id > 15) {
+                        // ерунда какая-то, пропускаем
+                        inputs = inputs->next;
+                        continue;    
+                    }
+                    // config inputs
+                    if (cJSON_IsTrue(cJSON_GetObjectItem(inputs, "isButton")))
+                        clrbit(inputsConfig, id);                
+                    // // rules
+                    // event1 = 0;
+                    // event2 = 0;
+                    if (cJSON_IsArray(cJSON_GetObjectItem(inputs, "events"))) {
+                        uint8_t evByteCnt = 0, eventCnt = 0;
+                        cJSON *events = cJSON_GetObjectItem(inputs, "events")->child;
+                        while (events) {
+                            if (cJSON_GetObjectItem(events, "slaveid")->valueint == slaveId) {
+                                ESP_LOGI("setConfig", "slaveid %d, input %d event %s", slaveId, id, cJSON_GetObjectItem(events, "event")->valuestring);
+                                // добавить событие только если оно этого же устройства                            
+                                // составляем байт. старшие 4 бита - номер выхода, 0-1 - действие, 2-3 событие                            
+                                event = cJSON_GetObjectItem(events, "output")->valueint;
+                                event <<= 4;
+                                event |= getActionValue(cJSON_GetObjectItem(events, "action")->valuestring);
+                                if (!strcmp(cJSON_GetObjectItem(events, "event")->valuestring, "on")) {
+                                    setbit(event, 2);
+                                    clrbit(event, 3);
+                                } else if (!strcmp(cJSON_GetObjectItem(events, "event")->valuestring, "toggle")) {
+                                    setbit(event, 2);
+                                    setbit(event, 3);                                
+                                } else if (!strcmp(cJSON_GetObjectItem(events, "event")->valuestring, "off")) {
+                                    clrbit(event, 2);
+                                    setbit(event, 3);                                
+                                }
+
+                                // add rule
+                                if (eventCnt % 2 == 0) {
+                                    // старший байт                                
+                                    eventsData[id*4+evByteCnt] = event;
+                                    eventsData[id*4+evByteCnt] <<= 8;
+                                } else {
+                                    // младший байт
+                                    eventsData[id*4+evByteCnt] |= event;                                
+                                    evByteCnt++;
+                                }     
+                                eventCnt++;                       
+                            }
+                            events = events->next;
+                        }                           
+                    }         
                     inputs = inputs->next;
-                    continue;    
                 }
-                // config inputs
-                if (cJSON_IsTrue(cJSON_GetObjectItem(inputs, "isButton")))
-                    clrbit(inputsConfig, id);                
-                // rules
-                event1 = 0;
-                event2 = 0;
-                if (cJSON_IsArray(cJSON_GetObjectItem(inputs, "events"))) {
-                    cJSON *events = cJSON_GetObjectItem(inputs, "events")->child;
-                    while (events) {
-                        if (cJSON_GetObjectItem(events, "slaveid")->valueint == slaveId) {
-                            ESP_LOGI("setConfig", "slaveid %d, input %d event %s", slaveId, id, cJSON_GetObjectItem(events, "event")->valuestring);
-                            // добавить событие только если оно этого же устройства
-                            if (!strcmp(cJSON_GetObjectItem(events, "event")->valuestring, "on") || 
-                                !strcmp(cJSON_GetObjectItem(events, "event")->valuestring, "toggle")) {
-                                // first byte
-                                event1 = cJSON_GetObjectItem(events, "output")->valueint;
-                                event1 <<= 4;
-                                event1 |= getActionValue(cJSON_GetObjectItem(events, "action")->valuestring);
-                            } else { // off
-                                // second byte
-                                event2 = cJSON_GetObjectItem(events, "output")->valueint;
-                                event2 <<= 4;
-                                event2 |= getActionValue(cJSON_GetObjectItem(events, "action")->valuestring);
-                            }                            
-                        }                    
-                        events = events->next;
-                    }       
-                    eventsData[id] = event1 << 8;                            
-                    eventsData[id] |= event2;
-                }         
-                inputs = inputs->next;
             }
             // подсчет выходов
             cJSON *outputs = cJSON_GetObjectItem(childDevice, "outputs")->child;
@@ -1339,8 +1439,14 @@ esp_err_t setDeviceConfig(char **response, uint8_t slaveId) {
     setHoldingQueue(slaveId, 8, outputsQty);
     setHoldingQueue(slaveId, 9, config);
     setHoldingQueue(slaveId, 0x0A, autoTimeout);
-    for (uint8_t i=0; i<inputsQty; i++)
-        setHoldingQueue(slaveId, 0x0B+i, eventsData[i]);
+    for (uint8_t i=0; i<inputsQty; i++) {
+        uint16_t buf[4];
+        memcpy(buf, eventsData+i*4, 4*sizeof(uint16_t));
+        ESP_LOGI(TAG, "index %d, data %d %d %d %d", i, buf[0],buf[1],buf[2],buf[3]);
+        //ESP_LOG_BUFFER_HEXDUMP("buf ", buf, 4, CONFIG_LOG_DEFAULT_LEVEL);
+        setHoldingsQueue(slaveId, 0x100+i*4, buf, 4);    
+        //setHoldingQueue(slaveId, 0x100+i*4, eventsData[i]);
+    }
     
     setText(response, "OK");
     return ESP_OK;
@@ -2082,7 +2188,8 @@ esp_err_t uiRouter(httpd_req_t *req) {
     } else if (!strcmp(uri, "/ui/devices")) {
         if (req->method == HTTP_GET) {
             httpd_resp_set_type(req, "application/json");
-            err = getDevices(&response);
+            //err = getDevices(&response);
+            err = getDevicesNew(req);
         } else if (req->method == HTTP_POST) {
             err = getContent(&content, req);
             if (err == ESP_OK) {
@@ -2220,7 +2327,7 @@ esp_err_t uiRouter(httpd_req_t *req) {
             ESP_LOGW(TAG, "Reebot!!!");
             //esp_restart();
             reboot = true;
-            setText(&response, "OK");
+            setText(&response, "Reboot OK");
             err = ESP_OK;
         } else {
             err = ESP_FAIL;
@@ -2231,7 +2338,7 @@ esp_err_t uiRouter(httpd_req_t *req) {
     } else if ((!strcmp(uri, "/service/upgrade")) && (req->method == HTTP_POST)) {
         stopPolling();
         startOTA();        
-        setText(&response, "OK");
+        setText(&response, "OTA OK");
         err = ESP_OK;        
     } else if ((!strcmp(uri, "/ui/version")) && (req->method == HTTP_GET)) {        
         char *version = getCurrentVersion();
@@ -2316,6 +2423,16 @@ esp_err_t uiRouter(httpd_req_t *req) {
             err = getContent(&content, req);
             if (err == ESP_OK) {
                 err = setTemperatures(&response, content);    
+            }            
+        }
+    } else if (!strcmp(uri, "/ui/test")) {
+        if (req->method == HTTP_GET) {
+            httpd_resp_set_type(req, "application/json");
+            err = getTest(&response);            
+        } else if (req->method == HTTP_POST) {
+            err = getContent(&content, req);
+            if (err == ESP_OK) {
+                err = setTest(&response, content);    
             }            
         }
     }
@@ -2658,9 +2775,13 @@ void processEvent(event_t *event) {
                                     act.action = getActionValue(cJSON_GetObjectItem(childEvent, "action")->valuestring);
                                     publish(act.slave_addr, act.output, act.action);
                                     // do not process action on the same slave
+                                    ESP_LOGI(TAG, "Event %d on slaveid %d. Action slave %d, output %d, action %d.",
+                                             event->event, event->slave_addr, act.slave_addr, act.output, act.action);
                                     if (getServiceConfigValueBool("actionslaveproc") && (act.slave_addr == event->slave_addr)) {
                                         // do nothing
+                                        ESP_LOGI(TAG, "Do nothing");
                                     } else {   
+                                        ESP_LOGI(TAG, "Action added");
                                         addAction(act);
                                     }
                                 }                               

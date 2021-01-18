@@ -9,8 +9,9 @@
 #define MB_WRITE_MULTI_REGISTER 0x10
 #define MB_WRITE_MULTI_COILS    0x0F    
 
-esp_err_t setCoilQueue(uint8_t slaveid, uint8_t adr, uint8_t value);
-esp_err_t setHoldingQueue(uint8_t slaveid, uint8_t adr, uint16_t value);
+esp_err_t setCoilQueue(uint8_t slaveid, uint16_t adr, uint8_t value);
+esp_err_t setHoldingQueue(uint8_t slaveid, uint16_t adr, uint16_t value);
+esp_err_t setHoldingsQueue(uint8_t slaveid, uint16_t adr, uint16_t *values, uint8_t valCount);
 esp_err_t mbInit();
 void setReadTimeOut(uint16_t val);
 void processQueue();

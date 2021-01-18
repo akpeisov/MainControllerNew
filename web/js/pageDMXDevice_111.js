@@ -21,49 +21,11 @@ var newOutputRow = {
       };      
 var newEventRow = {
         "event": "off",        
-        "slaveid": 0,   
-        "output": 0,
+        "slaveid": 2,   
+        "output": 2,
         "action": "off"   
       };
 
-function clearStatus() {
-    $("#error").html("");
-}
-
-var tableTree = new Tabulator("#tableDevicesTree", {
-    //height:"311px",    
-    layout:"fitData", // fitDataFill, fitData    
-    dataTree:true,
-    //data:devicesTree,    
-    ajaxURL:"/ui/devicesTree",
-    dataTreeStartExpanded:false,
-    responsiveLayout:"collapse",
-    selectable: false,
-    columns:[
-        {title:"Devices", field:"name", width:400},        
-        ],
-    rowClick:function(e, row){
-        //console.log(row._row.parent.getData());
-        var slaveid = -1;
-        var id = -1;
-        // смотрим родилетя
-        if (parent = row.getTreeParent()) {
-            // если он есть, то возможно у него тоже есть парент
-            if (gparent = parent.getTreeParent()) {
-                // выходим на верхний уровень (девайс)
-                slaveid = gparent.getData().slaveid;
-                id = row.getData().id;
-            } else 
-                slaveid = parent.getData().slaveid;
-        } else {
-            // если его нет, то значит мы на самом верху (девайс)
-            slaveid = row.getData().slaveid;
-        }
-        //console.log(row.getTreeParent().getData().slaveid);
-        treeRowClick(slaveid, row.getData().type, id);
-        console.log(slaveid);
-    }
-});
 
 var buttons = "<button class=\"ui-button ui-widget ui-corner-all\" id=\"bDevAdd\">Add device</button>"+
               "<button class=\"ui-button ui-widget ui-corner-all\" id=\"bDevAddFile\">Add device from file</button>"+
@@ -101,23 +63,6 @@ $('#file-input-add').on('change', function () {
 });
 
 
-function treeRowClick(slaveid, type, id) {
-    console.log("slaveid " + slaveid + " id " + id + " type " + type);
-    clearStatus();
-    // сам девайс - slaveid + type
-    // выходы - slaveid + type
-    // входы - slaveid + type
-    // вход - slaveid + type + id
-    if (type == "outputs")
-        outputsTable(slaveid);
-    else if (type == "inputs")
-        inputsTable(slaveid);
-    else if (type == "input")
-        eventsTable(slaveid, id);
-    else if (type == "device")
-        deviceTable(slaveid);
-}
-//var curOutputsTable;
 function deviceTable(slaveid) {
     // get /getDevice?slaveid=1
     // /deviceData    
@@ -185,7 +130,7 @@ function deviceTable(slaveid) {
                    "<td>&nbsp;</td>"+
                    "<td><input id=\"dev-polling\" type=\"checkbox\" "+polling+"/></td>"+
                    "</tr>"+
-                   "<tr><td><label>Polling mode (4 - owen, 8 - universal polling)</label>"+
+                   "<tr><td><label>Polling mode (1 coil, 2 input, 3 events)</label>"+
                    "<td>&nbsp;</td>"+
                    "<td><input class=\"txtStr\" type=\"text\" id=\"dev-pollingmode\" value=\""+dev.pollingmode+"\" maxlength=\"1\"></td>"+
                    "</tr>"+
@@ -468,7 +413,6 @@ function inputsTable(slaveid) {
 }
 
 function eventsTable(slaveid, inputid) {
-console.log("eventTable. slaveid " + slaveid + " input " + inputid);
     $("#subTitleDiv").html("<h3>Events</h3>");
     // TODO : endpoint get events by slaveid and inputid
     var table = new Tabulator("#tableDiv", {
@@ -505,9 +449,6 @@ console.log("eventTable. slaveid " + slaveid + " input " + inputid);
     $("#buttonsDiv").html(buttons);
 
     $("#bAdd").click(function(){
-        var newRow = newEventRow;
-        newRow.output = inputid;
-        newRow.slaveid = slaveid;        
         table.addRow(Object.assign({}, newEventRow));    
     });
 

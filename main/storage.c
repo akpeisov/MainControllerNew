@@ -96,11 +96,13 @@ esp_err_t initStorage() {
 	initNVS();
 	#ifdef USE_SD
 	if (initSD(MOUNT_POINT) != ESP_OK) {
-		ESP_LOGE(TAG, "Can't init SD");
+		ESP_LOGE(TAG, "Can't init SD. Trying init SPIFFS");
 		if (initSPIFFS(MOUNT_POINT) != ESP_OK) {
 			ESP_LOGE(TAG, "Can't init SPIFFS");
             return ESP_FAIL;
-		}		
+		} else {
+            ESP_LOGI(TAG, "Using SPIFFS");
+        }
 	}	
 	#else
 	if (initSPIFFS(MOUNT_POINT) != ESP_OK) {
@@ -408,6 +410,8 @@ esp_err_t setFileWeb(httpd_req_t *req) {
 
 esp_err_t writeLog(char* type, char* buffer) {
     // write logs
+    //temporary off
+    return ESP_OK;
     FILE *fd = fopen(logPath, "a+");
     if (!fd) {
         ESP_LOGE(TAG, "Failed to open file %s", logPath);        

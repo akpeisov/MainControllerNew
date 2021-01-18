@@ -10,7 +10,7 @@
 #define CONFIG_MB_UART_RTS 5
 #define MB_PORT_NUM    2
 #define MB_DEV_SPEED   115200
-#define MAX_REQUESTS 10
+#define MAX_REQUESTS 50
 
 #define BUF_SIZE              (127)
 #define PACKET_READ_TICS      (20 / portTICK_RATE_MS)
@@ -67,7 +67,7 @@ esp_err_t allocateQueue(mb_param_t** param) {
     return ESP_OK;
 }
 
-esp_err_t setCoilQueue(uint8_t slaveid, uint8_t adr, uint8_t value) {
+esp_err_t setCoilQueue(uint8_t slaveid, uint16_t adr, uint8_t value) {
     uint16_t val = 0xFF00;    
     if (value == 0)
         val = 0;
@@ -83,7 +83,7 @@ esp_err_t setCoilQueue(uint8_t slaveid, uint8_t adr, uint8_t value) {
     return ESP_OK;
 }
 
-esp_err_t setHoldingQueue(uint8_t slaveid, uint8_t adr, uint16_t value) {    
+esp_err_t setHoldingQueue(uint8_t slaveid, uint16_t adr, uint16_t value) {    
     mb_param_t *mbRequest;
     if (allocateQueue(&mbRequest) != ESP_OK) {
         return ESP_FAIL;
@@ -95,6 +95,21 @@ esp_err_t setHoldingQueue(uint8_t slaveid, uint8_t adr, uint16_t value) {
     mbRequest->values[0] = value;
     // ESP_LOGI(TAG, "Slaveid %d, adr %d, value %d", slaveid, adr, value);
     // ESP_LOGI(TAG, "Slaveid %d, adr %d, value %d", mbRequest->slave_addr, mbRequest->reg_start, mbRequest->values[0]);
+    return ESP_OK;
+}
+
+esp_err_t setHoldingsQueue(uint8_t slaveid, uint16_t adr, uint16_t *values, uint8_t valCount) {    
+    mb_param_t *mbRequest;
+    if (allocateQueue(&mbRequest) != ESP_OK) {
+        return ESP_FAIL;
+    }
+    mbRequest->slave_addr = slaveid;
+    mbRequest->command = MB_WRITE_MULTI_REGISTER;
+    mbRequest->reg_start = adr;
+    mbRequest->reg_size = valCount;
+    //mbRequest->values[0] = value;
+    memcpy(mbRequest->values, values, valCount*sizeof(uint16_t));
+    //memcpy(mbRequest->values, values, valCount);
     return ESP_OK;
 }
 
@@ -214,12 +229,12 @@ esp_err_t my_master_send_request(mb_param_t* request) {
             txLen = 6;
             break;
         case MB_WRITE_MULTI_REGISTER:
+            txLen = 7 + request->reg_size * 2;            
+            break;
+        case MB_WRITE_MULTI_COILS:
             txLen = 7 + request->reg_size / 8;
             if (request->reg_size % 8 > 0)
                 txLen++;
-            break;
-        case MB_WRITE_MULTI_COILS:
-            txLen = 7 + request->reg_size * 2;
             break;
         default:  
             break;          
@@ -249,9 +264,10 @@ esp_err_t my_master_send_request(mb_param_t* request) {
     if (request->command == MB_WRITE_MULTI_REGISTER) {
         txData[6] = request->reg_size * 2;
         for (uint8_t i=0;i<request->reg_size;i++) {
-            txData[7+i] = request->values[0] >> 8;
-            txData[7+i+1] = (uint8_t)request->values[0];
-        }        
+            txData[7+i*2] = request->values[i] >> 8;
+            txData[7+i*2+1] = (uint8_t)request->values[i];
+        }    
+        //ESP_LOG_BUFFER_HEXDUMP("cmd 10 txData", txData, txLen, CONFIG_LOG_DEFAULT_LEVEL);   
     } else if (request->command == MB_WRITE_MULTI_COILS) {
         // not inmplemented yet                
         free(txData);        
@@ -262,6 +278,7 @@ esp_err_t my_master_send_request(mb_param_t* request) {
     heap_caps_check_integrity_all(true);  
     
     uint8_t rxLen = 0;
+    char err_msg[20];
     esp_err_t err = sendPacket(txData, txLen, &rxData, &rxLen);     
     if (err == ESP_OK) {
         // everything is ok, return values    
@@ -273,6 +290,7 @@ esp_err_t my_master_send_request(mb_param_t* request) {
         uint8_t dataLen = rxData[2]; // in bytes
         if (dataLen > rxLen-3) { // address, command, length, crc
             ESP_LOGE(TAG, "Data length mismatch long! DataLen %d rxLen %d", dataLen, rxLen);
+            ESP_LOG_BUFFER_HEXDUMP("txData", txData, txLen, CONFIG_LOG_DEFAULT_LEVEL);
             ESP_LOG_BUFFER_HEXDUMP("rxData", rxData, rxLen, CONFIG_LOG_DEFAULT_LEVEL);
             err = ESP_ERR_INVALID_RESPONSE;
         } else {
@@ -292,10 +310,12 @@ esp_err_t my_master_send_request(mb_param_t* request) {
             // other commands for set data            
         }        
     } else if (err == ESP_ERR_INVALID_SIZE) {        
-        ESP_LOGE(TAG, "Error while sending request");                
+        ESP_LOGE(TAG, "Error while sending request. txLen is %d", txLen);                
         ESP_LOG_BUFFER_HEXDUMP("txData", txData, txLen, CONFIG_LOG_DEFAULT_LEVEL);        
     } else if (err != ESP_OK) {
-        //ESP_LOGE(TAG, "Error while getting response. Errcode %d, %s. txLen %d", err, getMBError(err), txLen);        
+        //ESP_LOGE(TAG, "Error while getting response. Errcode %d, %s. txLen %d", err, getMBError(err), txLen);   
+        //ESP_LOGE(TAG, "txLen is %d", txLen);         
+        ESP_LOGE(TAG, "Error %s", esp_err_to_name_r(err, err_msg, sizeof(err_msg)));
         ESP_LOG_BUFFER_HEXDUMP("txData", txData, txLen, CONFIG_LOG_DEFAULT_LEVEL);
         ESP_LOG_BUFFER_HEXDUMP("rxData", rxData, rxLen, CONFIG_LOG_DEFAULT_LEVEL);        
     }
@@ -331,14 +351,24 @@ void processQueue() {
     // for set coil or set holdings
     esp_err_t res;
     mb_param_t *req;
+    char buf[100] = {0};
+    char dec[5];
     uint8_t queueIndx;
     while (getQueue(&req, &queueIndx)) {                
         ESP_LOGI(TAG, "Queue index is %d", queueIndx);
         res = my_master_send_request(req);
         //res = ESP_OK;
         if (res == ESP_OK) {
-            ESP_LOGI(TAG, "processQueue. Command %d executed succesfull on slave %d. start %d value %d", 
-                              req->command, req->slave_addr, req->reg_start, req->values[0]);
+            buf[0] = 0;
+            for (uint8_t i=0; i<req->reg_size; i++) {
+                itoa(req->values[i], dec, 16);
+                strcat(buf, dec);
+                strcat(buf, " ");
+            }
+            // ESP_LOGI(TAG, "processQueue. Command %d executed succesfull on slave %d. start %d value %d", 
+            //                   req->command, req->slave_addr, req->reg_start, req->values[0]);
+            ESP_LOGI(TAG, "processQueue. Command %d executed succesfull on slave %d. start %d values %s", 
+                              req->command, req->slave_addr, req->reg_start, buf);
         } else {
             ESP_LOGE(TAG, "processQueue. Can't execute queue command %d on slave %d", req->command, req->slave_addr);
         }           

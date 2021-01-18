@@ -67,6 +67,7 @@ static esp_err_t mqtt_event_handler_cb(esp_mqtt_event_handle_t event)
             char stopic[100];
             strcpy(stopic, "/");
             strcat(stopic, getNetworkConfigValueString("hostname"));
+            strcat(stopic, "-in");
             strcat(stopic, "/#");
             strcat(stopic, "\0");            
             msg_id = esp_mqtt_client_subscribe(client, stopic, 0);
@@ -155,6 +156,10 @@ static void mqtt_app_start(void)
     //mqtt_cfg.uri = uri;
     //mqtt_cfg.uri = "mqtt://mqtt:mqtt1@192.168.4.7:1883";
     mqtt_cfg.uri = getNetworkConfigValueString("MQTTuri");
+    if (mqtt_cfg.uri == NULL) {
+        ESP_LOGI(TAG, "No MQTT uri defined");
+        return;
+    }
     
     //esp_mqtt_client_handle_t client = esp_mqtt_client_init(&mqtt_cfg);
     mqttclient = esp_mqtt_client_init(&mqtt_cfg);

@@ -75,6 +75,7 @@ void modBusTask(void *pvParameter) {
 
 void app_main(void)
 {
+    ESP_LOGW(TAG, "Free heap size is %d", esp_get_free_heap_size());
     initLED();
     changeLEDStatus(LED_BOOTING);
     if (initStorage() != ESP_OK) {
@@ -84,11 +85,15 @@ void app_main(void)
     }
     
     loadConfig();
+    ESP_LOGW(TAG, "Free heap size after load config %d", esp_get_free_heap_size());
     if (initNetwork() == ESP_OK) {
         initWebServer();
     }
     
+    ESP_LOGW(TAG, "Free heap size after init network and web %d", esp_get_free_heap_size());
+    
     mbInit();    
+    ESP_LOGW(TAG, "Free heap size after init modbus %d", esp_get_free_heap_size());
     //sem_busy = xSemaphoreCreateMutex();
     createSemaphore();
     xTaskCreate(&wdtMemoryTask, "wdtMemoryTask", 4096, NULL, 5, NULL);
@@ -98,7 +103,10 @@ void app_main(void)
     writeLog("I", "System started");
 
     initMQTT();
+    ESP_LOGW(TAG, "Free heap size after init MQTT %d", esp_get_free_heap_size());
     initFTP();
+    ESP_LOGW(TAG, "Free heap size after init FTP %d", esp_get_free_heap_size());
     DMXInit();
+    ESP_LOGW(TAG, "Free heap size after init DMX %d", esp_get_free_heap_size());
 
 }

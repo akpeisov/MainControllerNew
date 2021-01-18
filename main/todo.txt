@@ -2,10 +2,11 @@
 
 +1. RGB лента via DMX
 +2. SPIFFS + FTP
-3. Polling mode для овена
-4. OpenHab connect (MQTT/ModBus TCP)
++ 3. Polling mode для овена
++ 4. OpenHab connect (MQTT/ModBus TCP)
 5. RGB контроллер
 +6. FTP
+7. WEB. При добавлении событий сразу должен быть слейв тот же, output the same as input
 
 99. Под алису бы надо переделать логику. Все должно быть от устройства, его умения и т.д.
 
