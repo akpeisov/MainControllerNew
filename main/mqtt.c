@@ -58,15 +58,15 @@ void parseTopic(char* topic, char* data) {
 static esp_err_t mqtt_event_handler_cb(esp_mqtt_event_handle_t event)
 {
     esp_mqtt_client_handle_t client = event->client;
-    int msg_id;
+    //int msg_id;
     // your_context_t *context = event->context;
     switch (event->event_id) {
         case MQTT_EVENT_CONNECTED:
             ESP_LOGI(TAG, "MQTT_EVENT_CONNECTED");            
             //msg_id = esp_mqtt_client_subscribe(client, "/main/#", 0);
             char stopic[100];
-            strcpy(stopic, "/");
-            strcat(stopic, getNetworkConfigValueString("hostname"));
+            //strcpy(stopic, "/");
+            strcpy(stopic, getNetworkConfigValueString("hostname"));
             strcat(stopic, "-in");
             strcat(stopic, "/#");
             strcat(stopic, "\0");            

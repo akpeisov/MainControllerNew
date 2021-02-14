@@ -150,7 +150,7 @@ esp_err_t loadTextFile(char * filename, char ** buffer) {
     if (fread(*buffer, 1, bufSize, f) < 1) {
         ESP_LOGE(TAG, "Can't fread");
     }
-        
+    buffer[0][bufSize] = 0;    
     fclose(f);
     ESP_LOGD(TAG, "getTextFile finish");
     return ESP_OK;
